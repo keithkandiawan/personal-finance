@@ -637,13 +637,38 @@ def add_zero_balances_for_sold_assets(current_balances: List[Dict], db_path: str
     """
     )
 
-    historical_holdings = set(cursor.fetchall())
-    conn.close()
+    historical_holdings = {(row["account_id"], row["currency_id"]) for row in cursor.fetchall()}
 
     sold_holdings = historical_holdings - current_holdings
 
     if sold_holdings:
-        logging.info(f"Found {len(sold_holdings)} previously held assets now at zero")
+        # Get account and currency names for logging
+        cursor = conn.execute(
+            """
+            SELECT id, name FROM accounts
+        """
+        )
+        account_names = {row["id"]: row["name"] for row in cursor.fetchall()}
+
+        cursor = conn.execute(
+            """
+            SELECT id, code FROM currencies
+        """
+        )
+        currency_codes = {row["id"]: row["code"] for row in cursor.fetchall()}
+
+        # Log zeroed holdings
+        logging.warning("=" * 70)
+        logging.warning("ZERO-BALANCE TRACKING")
+        logging.warning("=" * 70)
+        logging.warning(f"🔄 Recording {len(sold_holdings)} asset(s) now at zero:")
+
+        for account_id, currency_id in sorted(sold_holdings):
+            account_name = account_names.get(account_id, f"Account#{account_id}")
+            currency_code = currency_codes.get(currency_id, f"Currency#{currency_id}")
+            logging.warning(f"  • {account_name} / {currency_code} → 0.00")
+
+        logging.warning("=" * 70)
 
         for account_id, currency_id in sold_holdings:
             current_balances.append(
@@ -653,6 +678,8 @@ def add_zero_balances_for_sold_assets(current_balances: List[Dict], db_path: str
                     "quantity": 0.0,
                 }
             )
+
+    conn.close()
 
     return current_balances
 
