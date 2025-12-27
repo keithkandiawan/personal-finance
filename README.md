@@ -177,15 +177,42 @@ ORDER BY value_usd DESC;
 
 ## Scheduling (Production)
 
-Use cron or launchd to run ingestion scripts:
+### FX Rate Updates
+
+The FX ingestion script fetches current exchange rates from TradingView:
 
 ```bash
-# Crontab example - update prices every hour
-0 * * * * cd /path/to/personal-finance && python scripts/fetch_prices.py
+# Run manually
+python scripts/ingest_fx_rates.py data/portfolio.db
 
-# Update balances daily at 6 AM
-0 6 * * * cd /path/to/personal-finance && python scripts/update_balances.py
+# Check logs
+tail -f logs/fx_rates_$(date +%Y%m).log
 ```
+
+**Features:**
+- Lock file prevents concurrent runs
+- Monthly log rotation
+- Validates database before running
+- Reports stale rates (>24h old)
+- Exit codes: 0=success, 1=failure, 2=already running
+
+### Cron Setup
+
+```bash
+# Copy example config
+cp cron.example cron.conf
+
+# Edit paths
+nano cron.conf
+
+# Install crontab
+crontab cron.conf
+
+# Example: Update FX rates daily at 9 AM
+0 9 * * * cd /path/to/personal-finance && python scripts/ingest_fx_rates.py data/portfolio.db
+```
+
+See `cron.example` for complete scheduling examples.
 
 ## Development
 

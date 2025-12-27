@@ -1,0 +1,80 @@
+# Personal Finance Tracker - Cron Schedule Examples
+#
+# To use:
+# 1. Copy this file: cp cron.example cron.conf
+# 2. Edit paths to match your installation
+# 3. Install: crontab cron.conf
+#
+# Format: minute hour day month weekday command
+
+# Change this to your installation path
+PROJECT_DIR=/path/to/personal-finance
+
+# ============================================================================
+# FX RATE UPDATES
+# ============================================================================
+
+# Update FX rates daily at 9:00 AM
+# (After markets open but before most people check)
+0 9 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db
+
+# Alternative: Update every 6 hours
+# 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db
+
+# ============================================================================
+# BALANCE SNAPSHOTS (Future)
+# ============================================================================
+
+# Crypto balances - every 4 hours
+# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_crypto_balances.py data/portfolio.db
+
+# Fiat balances - daily at 8:00 AM
+# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_fiat_balances.py data/portfolio.db
+
+# ============================================================================
+# REPORTS & EXPORTS (Future)
+# ============================================================================
+
+# Export CSV reports - daily at 10:00 PM
+# 0 22 * * * cd $PROJECT_DIR && python scripts/export_reports.py data/portfolio.db
+
+# ============================================================================
+# BACKUP (Future)
+# ============================================================================
+
+# Backup database - daily at 3:00 AM
+# 0 3 * * * cd $PROJECT_DIR && ./scripts/backup_database.sh
+
+# ============================================================================
+# MONITORING (Future)
+# ============================================================================
+
+# Check for stale data and send alerts - every 12 hours
+# 0 */12 * * * cd $PROJECT_DIR && python scripts/check_data_freshness.py
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# Exit Codes:
+#   0 = Success
+#   1 = Failure (no data updated or error)
+#   2 = Already running (lock file held)
+#   130 = Interrupted by user
+#
+# Logging:
+#   - Logs are written to logs/ directory
+#   - Monthly rotation (fx_rates_YYYYMM.log)
+#   - Cron output can be redirected: >> logs/cron.log 2>&1
+#
+# Lock Files:
+#   - Prevents concurrent runs
+#   - Located in data/ directory
+#   - Auto-cleaned on successful exit
+#   - If stale, manually remove: rm data/.*.lock
+#
+# Monitoring:
+#   - Check logs regularly: tail -f logs/fx_rates_$(date +%Y%m).log
+#   - Monitor cron mail for errors
+#   - Set up log rotation with logrotate
+#
