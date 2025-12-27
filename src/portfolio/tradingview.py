@@ -30,7 +30,10 @@ logger = logging.getLogger(__name__)
 
 def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str, bool]]:
     """
-    Get all currencies that have TradingView symbol mappings.
+    Get all currencies that have TradingView symbol mappings and no parent currency.
+
+    Currencies with parent_currency_id will inherit rates from their parent,
+    so they don't need their own symbol mappings fetched.
 
     Args:
         db_path: Path to the SQLite database
@@ -49,6 +52,7 @@ def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str, bool]]:
             FROM currencies c
             INNER JOIN symbol_mappings sm ON c.id = sm.currency_id
             WHERE sm.source = 'tradingview'
+              AND (c.parent_currency_id IS NULL OR c.parent_currency_id = c.id)
             ORDER BY c.code
         """)
         return cursor.fetchall()
@@ -127,26 +131,94 @@ def update_fx_rate(
         conn.close()
 
 
-def fetch_and_update_prices(db_path: str = 'portfolio.db') -> int:
+def propagate_parent_rates(db_path: str) -> int:
     """
-    Fetch prices from TradingView and update fx_rates table.
+    Copy FX rates from parent currencies to child currencies.
+
+    For currencies with parent_currency_id set (e.g., LDBNB → BNB),
+    copies the parent's FX rate to the child.
 
     Args:
         db_path: Path to the SQLite database
 
     Returns:
-        Number of successfully updated prices
+        Number of child currencies updated
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    try:
+        # Get all child currencies with their parent rates
+        cursor = conn.execute("""
+            SELECT
+                child.id as child_id,
+                child.code as child_code,
+                parent.id as parent_id,
+                parent.code as parent_code,
+                fx.rate as parent_rate,
+                fx.source as parent_source
+            FROM currencies child
+            INNER JOIN currencies parent ON child.parent_currency_id = parent.id
+            INNER JOIN fx_rates fx ON parent.id = fx.currency_id
+            WHERE child.parent_currency_id IS NOT NULL
+              AND child.id != child.parent_currency_id
+        """)
+
+        children = cursor.fetchall()
+
+        if not children:
+            logger.info("No child currencies with parent rates found")
+            return 0
+
+        logger.info(f"Propagating rates to {len(children)} child currencies...")
+
+        updated_count = 0
+        for child in children:
+            # Update child currency with parent's rate
+            conn.execute("""
+                INSERT INTO fx_rates (currency_id, rate, source, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(currency_id) DO UPDATE SET
+                    rate = excluded.rate,
+                    source = excluded.source,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (child['child_id'], child['parent_rate'],
+                  f"{child['parent_source']} (from {child['parent_code']})"))
+
+            logger.info(f"  ✓ {child['child_code']} ← {child['parent_code']}: ${child['parent_rate']}")
+            updated_count += 1
+
+        conn.commit()
+        return updated_count
+
+    except sqlite3.Error as e:
+        logger.error(f"Error propagating parent rates: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
+def fetch_and_update_prices(db_path: str = 'portfolio.db') -> int:
+    """
+    Fetch prices from TradingView and update fx_rates table.
+    Also propagates rates from parent currencies to child currencies.
+
+    Args:
+        db_path: Path to the SQLite database
+
+    Returns:
+        Number of successfully updated prices (including propagated child rates)
     """
     logger.info("Starting TradingView price fetch...")
 
-    # Get all TradingView symbols
+    # Get all TradingView symbols (excludes child currencies with parents)
     symbols = get_tradingview_symbols(db_path)
 
     if not symbols:
         logger.warning("No TradingView symbol mappings found in database")
         return 0
 
-    logger.info(f"Found {len(symbols)} currencies with TradingView mappings")
+    logger.info(f"Found {len(symbols)} parent currencies with TradingView mappings")
 
     # Fetch and update prices
     updated_count = 0
@@ -173,16 +245,23 @@ def fetch_and_update_prices(db_path: str = 'portfolio.db') -> int:
         else:
             failed_symbols.append((currency_code, "Fetch failed"))
 
+    # Propagate parent rates to child currencies
+    logger.info("=" * 60)
+    child_count = propagate_parent_rates(db_path)
+    total_updated = updated_count + child_count
+
     # Summary
     logger.info("=" * 60)
-    logger.info(f"Price fetch complete: {updated_count}/{len(symbols)} successful")
+    logger.info(f"Price fetch complete: {updated_count}/{len(symbols)} parent currencies")
+    logger.info(f"Child currencies updated: {child_count}")
+    logger.info(f"Total updated: {total_updated}")
 
     if failed_symbols:
         logger.warning("Failed to update:")
         for symbol, reason in failed_symbols:
             logger.warning(f"  • {symbol}: {reason}")
 
-    return updated_count
+    return total_updated
 
 
 def check_stale_rates(db_path: str = 'portfolio.db', hours: int = 24) -> List[Dict]:

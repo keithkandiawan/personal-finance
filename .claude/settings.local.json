@@ -6,7 +6,10 @@
       "Bash(chmod:*)",
       "Bash(python scripts/example_setup.py:*)",
       "Bash(python scripts/ingest_fx_rates.py:*)",
-      "Bash(python scripts/bootstrap_accounts.py:*)"
+      "Bash(python scripts/bootstrap_accounts.py:*)",
+      "Bash(python scripts/bootstrap_currencies.py:*)",
+      "Bash(python scripts/add_symbol_mappings.py:*)",
+      "Bash(python scripts/bootstrap_blockchain_mappings.py:*)"
     ]
   }
 }
