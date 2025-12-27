@@ -158,12 +158,19 @@ INSERT OR IGNORE INTO currency_types (name) VALUES
     ('etf');
 
 -- Initial account types
+-- Assets (what you own)
 INSERT OR IGNORE INTO account_types (name) VALUES
     ('exchange'),
     ('wallet'),
     ('bank'),
     ('cash'),
     ('brokerage');
+
+-- Liabilities (what you owe)
+INSERT OR IGNORE INTO account_types (name) VALUES
+    ('loan'),
+    ('credit_card'),
+    ('payable');
 
 -- Seed USD as base currency
 INSERT OR IGNORE INTO currencies (code, type)
@@ -268,3 +275,76 @@ INNER JOIN currencies c ON fx.currency_id = c.id
 INNER JOIN currency_types ct ON c.type = ct.id
 WHERE (julianday('now') - julianday(fx.updated_at)) * 24 > 24
 ORDER BY fx.updated_at ASC;
+
+-- Asset accounts (what you own)
+CREATE VIEW IF NOT EXISTS asset_accounts AS
+SELECT
+    a.id,
+    a.name,
+    at.name as account_type,
+    p.name as provider
+FROM accounts a
+INNER JOIN account_types at ON a.type = at.id
+INNER JOIN providers p ON a.provider = p.id
+WHERE at.name IN ('exchange', 'wallet', 'bank', 'cash', 'brokerage')
+  AND a.is_active = 1;
+
+-- Liability accounts (what you owe)
+CREATE VIEW IF NOT EXISTS liability_accounts AS
+SELECT
+    a.id,
+    a.name,
+    at.name as account_type,
+    p.name as provider
+FROM accounts a
+INNER JOIN account_types at ON a.type = at.id
+INNER JOIN providers p ON a.provider = p.id
+WHERE at.name IN ('loan', 'credit_card', 'payable')
+  AND a.is_active = 1;
+
+-- Latest assets (positive net worth contributors)
+CREATE VIEW IF NOT EXISTS latest_assets AS
+SELECT
+    lb.account_id,
+    lb.account_name,
+    lb.currency_id,
+    lb.currency_code,
+    lb.quantity,
+    lb.value_idr,
+    lb.value_usd,
+    lb.timestamp
+FROM latest_balances lb
+INNER JOIN asset_accounts aa ON lb.account_id = aa.id;
+
+-- Latest liabilities (negative net worth contributors)
+CREATE VIEW IF NOT EXISTS latest_liabilities AS
+SELECT
+    lb.account_id,
+    lb.account_name,
+    lb.currency_id,
+    lb.currency_code,
+    lb.quantity,
+    lb.value_idr,
+    lb.value_usd,
+    lb.timestamp
+FROM latest_balances lb
+INNER JOIN liability_accounts la ON lb.account_id = la.id;
+
+-- Net worth summary (Assets - Liabilities)
+CREATE VIEW IF NOT EXISTS net_worth_summary AS
+SELECT
+    'Assets' as category,
+    SUM(value_idr) as total_idr,
+    SUM(value_usd) as total_usd
+FROM latest_assets
+UNION ALL
+SELECT
+    'Liabilities' as category,
+    SUM(value_idr) as total_idr,
+    SUM(value_usd) as total_usd
+FROM latest_liabilities
+UNION ALL
+SELECT
+    'Net Worth' as category,
+    (SELECT SUM(value_idr) FROM latest_assets) - COALESCE((SELECT SUM(value_idr) FROM latest_liabilities), 0) as total_idr,
+    (SELECT SUM(value_usd) FROM latest_assets) - COALESCE((SELECT SUM(value_usd) FROM latest_liabilities), 0) as total_usd;

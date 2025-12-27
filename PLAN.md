@@ -115,7 +115,8 @@ created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 
 6.5 account_types
 id     INTEGER PRIMARY KEY AUTOINCREMENT  -- dense index
-name   TEXT NOT NULL UNIQUE               -- exchange | wallet | bank | cash | brokerage
+name   TEXT NOT NULL UNIQUE               -- Assets: exchange | wallet | bank | cash | brokerage
+                                          -- Liabilities: loan | credit_card | payable
 
 6.6 providers
 id     INTEGER PRIMARY KEY AUTOINCREMENT  -- dense index
