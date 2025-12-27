@@ -3,7 +3,7 @@ name = "personal-finance-tracker"
 version = "0.1.0"
 description = "Personal portfolio tracking system with SQLite, Python, and spreadsheet UI"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.14"
 authors = [
     {name = "Keith"}
 ]
@@ -18,10 +18,6 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_backend"
 
 [tool.setuptools.packages.find]
 where = ["src"]

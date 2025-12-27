@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python scripts/init_db.py:*)"
+      "Bash(python scripts/init_db.py:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

@@ -92,10 +92,16 @@ Maps currencies to external data source symbols (TradingView, Binance, etc.)
 id              INTEGER PRIMARY KEY AUTOINCREMENT
 currency_id     INTEGER NOT NULL REFERENCES currencies(id) ON DELETE CASCADE
 source          TEXT NOT NULL                      -- 'tradingview', 'binance', 'coinmarketcap'
-symbol          TEXT NOT NULL                      -- 'NASDAQ:AAPL', 'BTCUSDT', etc.
+symbol          TEXT NOT NULL                      -- 'NASDAQ:AAPL', 'BTCUSDT', 'ICE:USDIDR', etc.
+is_inverted     INTEGER DEFAULT 0                  -- 1 = invert rate (for USD/XXX pairs)
 is_primary      INTEGER DEFAULT 0                  -- 1 = primary source for this currency
 created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 UNIQUE(currency_id, source)
+
+Examples:
+  AAPL: symbol='NASDAQ:AAPL', is_inverted=0 (price is USD per share)
+  BTC:  symbol='BINANCE:BTCUSDT', is_inverted=0 (price is USD per BTC)
+  IDR:  symbol='ICE:USDIDR', is_inverted=1 (TradingView shows USD/IDR, we invert to get IDR rate)
 
 6.4 accounts
 --------
@@ -117,12 +123,20 @@ name   TEXT NOT NULL UNIQUE               -- binance, ledger, bca
 
 6.7 fx_rates
 
-Latest FX Snapshots, will be replaced by new data. rates of all currencies to USD
+Latest FX Snapshots, will be replaced by new data. All rates normalized to USD.
 currency_id     INTEGER NOT NULL REFERENCES currencies(id)
-rate            REAL NOT NULL
-source          TEXT                               -- e.g., 'coinmarketcap', 'exchangerate-api'
+rate            REAL NOT NULL                      -- How many USD per 1 unit of currency
+source          TEXT                               -- e.g., 'tradingview', 'coinmarketcap'
 updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 PRIMARY KEY (currency_id)
+
+Examples:
+  USD:  rate=1.0       (base currency)
+  IDR:  rate=0.0000625 (if TradingView USD/IDR=16000, inverted via symbol mapping)
+  BTC:  rate=45000
+  AAPL: rate=195
+
+Note: For USD/XXX pairs (like ICE:USDIDR), set is_inverted=1 in symbol_mappings to get XXX rate
 
 6.8 balances
 

@@ -57,6 +57,7 @@ def add_symbol_mapping(
     currency_id: int,
     source: str,
     symbol: str,
+    is_inverted: bool = False,
     is_primary: bool = True
 ):
     """
@@ -66,13 +67,14 @@ def add_symbol_mapping(
         conn: SQLite connection
         currency_id: ID of the currency
         source: Data source ('tradingview', 'binance', etc.)
-        symbol: Symbol at that source ('NASDAQ:AAPL', 'BTCUSDT', etc.)
+        symbol: Symbol at that source ('NASDAQ:AAPL', 'BTCUSDT', 'ICE:USDIDR', etc.)
+        is_inverted: Whether to invert the rate (for USD/XXX pairs like USD/IDR)
         is_primary: Whether this is the primary source for this currency
     """
     conn.execute("""
-        INSERT OR REPLACE INTO symbol_mappings (currency_id, source, symbol, is_primary)
-        VALUES (?, ?, ?, ?)
-    """, (currency_id, source, symbol, 1 if is_primary else 0))
+        INSERT OR REPLACE INTO symbol_mappings (currency_id, source, symbol, is_inverted, is_primary)
+        VALUES (?, ?, ?, ?, ?)
+    """, (currency_id, source, symbol, 1 if is_inverted else 0, 1 if is_primary else 0))
     conn.commit()
 
 
@@ -121,8 +123,8 @@ def setup_example_currencies(db_path: str = 'portfolio.db'):
         # Example 5: Fiat (if needed for FX rates)
         print("\nAdding fiat currencies...")
         idr_id = add_currency(conn, 'IDR', 'fiat')
-        add_symbol_mapping(conn, idr_id, 'tradingview', 'FX:USDIDR')
-        print(f"  ✓ IDR (Indonesian Rupiah) -> FX:USDIDR")
+        add_symbol_mapping(conn, idr_id, 'tradingview', 'ICE:USDIDR', is_inverted=True)
+        print(f"  ✓ IDR (Indonesian Rupiah) -> ICE:USDIDR (inverted)")
 
         usd_id = add_currency(conn, 'USD', 'fiat')
         # USD doesn't need a mapping since all rates are to USD

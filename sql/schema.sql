@@ -40,10 +40,15 @@ CREATE TABLE IF NOT EXISTS symbol_mappings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     currency_id     INTEGER NOT NULL REFERENCES currencies(id) ON DELETE CASCADE,
     source          TEXT NOT NULL,  -- 'tradingview', 'binance', 'coinmarketcap', etc.
-    symbol          TEXT NOT NULL,  -- 'NASDAQ:AAPL', 'BTCUSDT', etc.
+    symbol          TEXT NOT NULL,  -- 'NASDAQ:AAPL', 'BTCUSDT', 'ICE:USDIDR', etc.
+    is_inverted     INTEGER DEFAULT 0,  -- 1 = invert rate (for pairs like USD/IDR where we need IDR/USD)
     is_primary      INTEGER DEFAULT 0,  -- 1 = primary source for this currency
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(currency_id, source)
+    -- Examples:
+    -- AAPL: symbol='NASDAQ:AAPL', is_inverted=0 (price is USD per share)
+    -- BTC:  symbol='BINANCE:BTCUSDT', is_inverted=0 (price is USD per BTC)
+    -- IDR:  symbol='ICE:USDIDR', is_inverted=1 (TradingView shows USD/IDR, we want IDR/USD)
 );
 
 -- Accounts (binance_main, ledger_btc, bca_checking, etc.)
@@ -61,13 +66,18 @@ CREATE TABLE IF NOT EXISTS accounts (
 -- TRANSACTIONAL DATA TABLES
 -- ============================================================================
 
--- FX Rates (latest rates of all currencies to USD)
+-- FX Rates (latest rates to USD)
 CREATE TABLE IF NOT EXISTS fx_rates (
     currency_id     INTEGER NOT NULL REFERENCES currencies(id),
-    rate            REAL NOT NULL,
-    source          TEXT,  -- e.g., 'coinmarketcap', 'exchangerate-api'
+    rate            REAL NOT NULL,  -- How many USD per 1 unit of currency
+    source          TEXT,  -- e.g., 'tradingview', 'coinmarketcap'
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (currency_id)
+    -- Examples:
+    -- USD:  rate=1.0       (base currency)
+    -- IDR:  rate=0.0000625 (if TradingView shows USD/IDR=16000, inverted via symbol mapping)
+    -- BTC:  rate=45000
+    -- AAPL: rate=195
 );
 
 -- Balances (point-in-time snapshots - APPEND ONLY)
@@ -154,6 +164,18 @@ INSERT OR IGNORE INTO account_types (name) VALUES
     ('bank'),
     ('cash'),
     ('brokerage');
+
+-- Seed USD as base currency
+INSERT OR IGNORE INTO currencies (code, type)
+VALUES ('USD', (SELECT id FROM currency_types WHERE name = 'fiat'));
+
+-- Seed USD FX rate (always 1.0 as it's the base currency)
+INSERT OR IGNORE INTO fx_rates (currency_id, rate, source)
+VALUES (
+    (SELECT id FROM currencies WHERE code = 'USD'),
+    1.0,
+    'system'
+);
 
 -- ============================================================================
 -- VIEWS FOR REPORTING

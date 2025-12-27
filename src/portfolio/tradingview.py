@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str]]:
+def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str, bool]]:
     """
     Get all currencies that have TradingView symbol mappings.
 
@@ -36,7 +36,7 @@ def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str]]:
         db_path: Path to the SQLite database
 
     Returns:
-        List of (currency_id, currency_code, tradingview_symbol) tuples
+        List of (currency_id, currency_code, tradingview_symbol, is_inverted) tuples
     """
     conn = sqlite3.connect(db_path)
     try:
@@ -44,7 +44,8 @@ def get_tradingview_symbols(db_path: str) -> List[Tuple[int, str, str]]:
             SELECT
                 c.id,
                 c.code,
-                sm.symbol
+                sm.symbol,
+                sm.is_inverted
             FROM currencies c
             INNER JOIN symbol_mappings sm ON c.id = sm.currency_id
             WHERE sm.source = 'tradingview'
@@ -96,7 +97,7 @@ def update_fx_rate(
     Args:
         db_path: Path to the SQLite database
         currency_id: ID of the currency
-        rate: Exchange rate to USD
+        rate: Exchange rate to USD (how many USD per 1 unit of currency)
         source: Data source name
 
     Returns:
@@ -151,15 +152,22 @@ def fetch_and_update_prices(db_path: str = 'portfolio.db') -> int:
     updated_count = 0
     failed_symbols = []
 
-    for currency_id, currency_code, tv_symbol in symbols:
+    for currency_id, currency_code, tv_symbol, is_inverted in symbols:
         logger.info(f"Processing {currency_code} ({tv_symbol})...")
 
         price = fetch_price_from_tradingview(tv_symbol)
 
         if price is not None:
-            if update_fx_rate(db_path, currency_id, price):
+            # Apply inversion if needed
+            if is_inverted:
+                rate = 1.0 / price if price != 0 else 0
+                logger.info(f"Inverted {tv_symbol}: {price} → {rate:.8f}")
+            else:
+                rate = price
+
+            if update_fx_rate(db_path, currency_id, rate):
                 updated_count += 1
-                logger.info(f"✓ Updated {currency_code}: ${price}")
+                logger.info(f"✓ Updated {currency_code}: ${rate}")
             else:
                 failed_symbols.append((currency_code, "Database error"))
         else:
