@@ -49,24 +49,38 @@ def setup_logging(log_dir: Path):
     """Setup logging to both file and console."""
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    # Simple formatter without logger name to avoid duplication
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%(asctime)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    # Get root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Clear existing handlers to prevent duplication
+    logger.handlers.clear()
+
+    # File handler
     log_file = log_dir / f"balances_{datetime.now().strftime('%Y%m')}.log"
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
+    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
-
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
+
+    # Prevent propagation from imported module loggers
+    for module in ["portfolio.blockchain", "portfolio.exchanges", "portfolio.tradingview"]:
+        module_logger = logging.getLogger(module)
+        module_logger.propagate = (
+            True  # Let it propagate to root, but root only has one set of handlers
+        )
 
     return logger
 
@@ -88,9 +102,7 @@ class LockFile:
             return self
         except IOError:
             self.lock_file.close()
-            raise RuntimeError(
-                f"Another instance is already running (lock file: {self.lock_path})"
-            )
+            raise RuntimeError(f"Another instance is already running (lock file: {self.lock_path})")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lock_file:
@@ -416,7 +428,9 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
             try:
                 quantity = float(amount_str.replace(",", ""))
             except ValueError:
-                invalid_amounts.append(f"Row {idx}: Invalid amount '{amount_str}' for {account_name}/{currency_code}")
+                invalid_amounts.append(
+                    f"Row {idx}: Invalid amount '{amount_str}' for {account_name}/{currency_code}"
+                )
                 continue
 
             # Check account exists
@@ -454,37 +468,37 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
 
         # Print clean summary of issues
         if missing_accounts or missing_currencies or invalid_amounts or skipped_rows:
-            logging.warning("\n" + "=" * 70)
+            logging.warning("=" * 70)
             logging.warning("FIAT BALANCE ISSUES - ACTION REQUIRED")
             logging.warning("=" * 70)
 
             if missing_accounts:
-                logging.warning(f"\n📋 Missing Accounts ({len(missing_accounts)}):")
+                logging.warning(f"📋 Missing Accounts ({len(missing_accounts)}):")
                 for account in sorted(missing_accounts):
                     logging.warning(f"  • {account}")
                 logging.warning("  → Add via: scripts/bootstrap_accounts.py")
 
             if missing_currencies:
-                logging.warning(f"\n💱 Missing Currencies ({len(missing_currencies)}):")
+                logging.warning(f"💱 Missing Currencies ({len(missing_currencies)}):")
                 for currency in sorted(missing_currencies):
                     logging.warning(f"  • {currency}")
                 logging.warning("  → Add via: scripts/bootstrap_currencies.py")
 
             if invalid_amounts:
-                logging.warning(f"\n⚠️  Invalid Amounts ({len(invalid_amounts)}):")
+                logging.warning(f"⚠️  Invalid Amounts ({len(invalid_amounts)}):")
                 for error in invalid_amounts:
                     logging.warning(f"  • {error}")
                 logging.warning("  → Fix amounts in Google Sheets")
 
             if skipped_rows:
-                logging.warning(f"\n⚠️  Skipped Rows ({len(skipped_rows)}):")
+                logging.warning(f"⚠️  Skipped Rows ({len(skipped_rows)}):")
                 for error in skipped_rows[:5]:  # Show first 5
                     logging.warning(f"  • {error}")
                 if len(skipped_rows) > 5:
                     logging.warning(f"  ... and {len(skipped_rows) - 5} more")
                 logging.warning("  → Fix formatting in Google Sheets")
 
-            logging.warning("=" * 70 + "\n")
+            logging.warning("=" * 70)
 
         if duplicate_count > 0:
             logging.info(f"✓ Aggregated {duplicate_count} duplicate entries")
@@ -525,14 +539,14 @@ def add_currency_ids(balances: List[Dict], db_path: str) -> List[Dict]:
 
     # Print clean summary
     if missing_currencies:
-        logging.warning("\n" + "=" * 70)
+        logging.warning("=" * 70)
         logging.warning("EXCHANGE BALANCE ISSUES - ACTION REQUIRED")
         logging.warning("=" * 70)
-        logging.warning(f"\n💱 Missing Currencies ({len(missing_currencies)}):")
+        logging.warning(f"💱 Missing Currencies ({len(missing_currencies)}):")
         for currency in sorted(missing_currencies):
             logging.warning(f"  • {currency}")
         logging.warning("  → Add via: python scripts/bootstrap_currencies.py")
-        logging.warning("=" * 70 + "\n")
+        logging.warning("=" * 70)
 
     return balances
 
@@ -549,8 +563,7 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
 
     # Get currency code lookup for better error messages
     currency_codes = {
-        row["id"]: row["code"]
-        for row in conn.execute("SELECT id, code FROM currencies").fetchall()
+        row["id"]: row["code"] for row in conn.execute("SELECT id, code FROM currencies").fetchall()
     }
 
     idr_currency_id = conn.execute("SELECT id FROM currencies WHERE code = 'IDR'").fetchone()
@@ -589,22 +602,20 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
 
     # Print clean summary of missing FX rates
     if missing_fx_rates:
-        logging.warning("\n" + "=" * 70)
+        logging.warning("=" * 70)
         logging.warning("MISSING FX RATES - ACTION REQUIRED")
         logging.warning("=" * 70)
-        logging.warning(f"\n💱 Currencies without FX rates ({len(missing_fx_rates)}):")
+        logging.warning(f"💱 Currencies without FX rates ({len(missing_fx_rates)}):")
         for currency in sorted(missing_fx_rates):
             logging.warning(f"  • {currency}")
-        logging.warning("\n  → Add rates via: python scripts/ingest_fx_rates.py")
+        logging.warning("  → Add rates via: python scripts/ingest_fx_rates.py")
         logging.warning("  → Or add symbol mappings first: python scripts/add_symbol_mappings.py")
-        logging.warning("=" * 70 + "\n")
+        logging.warning("=" * 70)
 
     return balances
 
 
-def add_zero_balances_for_sold_assets(
-    current_balances: List[Dict], db_path: str
-) -> List[Dict]:
+def add_zero_balances_for_sold_assets(current_balances: List[Dict], db_path: str) -> List[Dict]:
     """
     Add zero balances for previously held assets.
 
@@ -745,17 +756,17 @@ def main():
 
             # Fetch from selected sources
             if args.sources in ["all", "exchanges"]:
-                logger.info("\n--- Fetching Exchange Balances ---")
+                logger.info("--- Fetching Exchange Balances ---")
                 exchange_balances = fetch_exchange_balances(str(db_path))
                 all_balances.extend(exchange_balances)
 
             if args.sources in ["all", "wallets"]:
-                logger.info("\n--- Fetching Wallet Balances ---")
+                logger.info("--- Fetching Wallet Balances ---")
                 wallet_balances = fetch_wallet_balances(str(db_path))
                 all_balances.extend(wallet_balances)
 
             if args.sources in ["all", "fiat"]:
-                logger.info("\n--- Fetching Fiat Balances ---")
+                logger.info("--- Fetching Fiat Balances ---")
                 fiat_balances = fetch_fiat_balances(str(db_path))
                 all_balances.extend(fiat_balances)
 
