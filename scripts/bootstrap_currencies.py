@@ -31,11 +31,33 @@ def bootstrap_currencies(db_path: str):
     cursor.execute("SELECT id FROM currency_types WHERE name = 'fiat'")
     fiat_type_id = cursor.fetchone()[0]
 
+    # Create 'stock' type if it doesn't exist
+    cursor.execute("SELECT id FROM currency_types WHERE name = 'stock'")
+    stock_row = cursor.fetchone()
+    if stock_row:
+        stock_type_id = stock_row[0]
+    else:
+        cursor.execute("INSERT INTO currency_types (name) VALUES ('stock')")
+        stock_type_id = cursor.lastrowid
+        print("✓ Created 'stock' currency type")
+
+    # Create 'metal' type if it doesn't exist (for precious metals)
+    cursor.execute("SELECT id FROM currency_types WHERE name = 'metal'")
+    metal_row = cursor.fetchone()
+    if metal_row:
+        metal_type_id = metal_row[0]
+    else:
+        cursor.execute("INSERT INTO currency_types (name) VALUES ('metal')")
+        metal_type_id = cursor.lastrowid
+        print("✓ Created 'metal' currency type")
+
     # Define currencies to add
     # Format: (code, type_id)
     currencies = [
+        # Fiat Currencies
         ("IDR", fiat_type_id),
         ("USD", fiat_type_id),
+        ("SGD", fiat_type_id),
         # Major Stablecoins
         ("USDC", stablecoin_type_id),
         ("USDT", stablecoin_type_id),
@@ -50,12 +72,23 @@ def bootstrap_currencies(db_path: str):
         ("ATOM", crypto_type_id),
         ("NEAR", crypto_type_id),
         ("POL", crypto_type_id),
-        ("PAXG", crypto_type_id),
-        ("XAUT", crypto_type_id),
         ("ASTER", crypto_type_id),
+        ("TON", crypto_type_id),
+        ("TRX", crypto_type_id),
         # Exchange Tokens
         ("OKB", crypto_type_id),
+        ("BGB", crypto_type_id),  # Bitget Token
         ("S", crypto_type_id),
+        # Precious Metals & Metal-backed Tokens
+        ("PAXG", metal_type_id),  # Paxos Gold (tokenized gold)
+        ("XAUT", metal_type_id),  # Tether Gold (tokenized gold)
+        ("GOLD", metal_type_id),  # Gold-backed token
+        ("GLD", metal_type_id),   # SPDR Gold Shares ETF
+        ("SLV", metal_type_id),   # iShares Silver Trust ETF
+        # Stocks & ETFs
+        ("DIS", stock_type_id),   # Disney
+        ("SBUX", stock_type_id),  # Starbucks
+        ("TLT", stock_type_id),   # iShares 20+ Year Treasury Bond ETF
     ]
 
     inserted = 0

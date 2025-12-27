@@ -25,6 +25,9 @@ def add_symbol_mappings(db_path: str):
     # is_inverted=1 means the symbol shows XXX/USD, need to invert (1/rate)
     # is_primary=1 means this is the preferred symbol for this currency
     mappings = [
+        # Fiat Currencies
+        ("IDR", "FX_IDC:USDIDR", 1, 1),
+        ("SGD", "FX_IDC:SGDUSD", 0, 1),
         # Major Stablecoins (pegged to USD)
         ("USDC", "BINANCE:USDCUSDT", 0, 1),  # ~1.00 USD
         ("USDT", "BINANCE:USDTUSD", 0, 1),  # ~1.00 USD
@@ -40,11 +43,21 @@ def add_symbol_mappings(db_path: str):
         ("NEAR", "BINANCE:NEARUSDT", 0, 1),
         ("POL", "BINANCE:POLUSDT", 0, 1),
         ("PAXG", "BINANCE:PAXGUSDT", 0, 1),
+        ("TON", "BINANCE:TONUSDT", 0, 1),
+        ("TRX", "BINANCE:TRXUSDT", 0, 1),
+        ("S", "BINANCE:SUSDT", 0, 1),
+        ("GOLD", "TVC:GOLD", 0, 1),  # Gold-backed token
         # Exchange Tokens
         ("ASTER", "OKX:ASTERUSDT", 0, 1),
         ("XAUT", "OKX:XAUTUSDT", 0, 1),
         ("OKB", "OKX:OKBUSDT", 0, 1),
-        ("IDR", "FX_IDC:USDIDR", 1, 1),
+        ("BGB", "BITGET:BGBUSDT", 0, 1),
+        # Stocks & ETFs
+        ("DIS", "NYSE:DIS", 0, 1),  # Disney
+        ("SBUX", "NASDAQ:SBUX", 0, 1),  # Starbucks
+        ("GLD", "AMEX:GLD", 0, 1),  # SPDR Gold Shares ETF
+        ("SLV", "AMEX:SLV", 0, 1),  # iShares Silver Trust ETF
+        ("TLT", "NASDAQ:TLT", 0, 1),  # iShares 20+ Year Treasury Bond ETF
     ]
 
     inserted = 0

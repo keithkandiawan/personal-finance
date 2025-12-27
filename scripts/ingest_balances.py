@@ -393,25 +393,42 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
         }
         conn.close()
 
-        # Parse balances - aggregate duplicates
+        # Parse balances - aggregate duplicates and track errors
         balance_dict = {}  # (account_id, currency_id) -> balance info
         duplicate_count = 0
 
+        # Track issues for clean reporting
+        missing_accounts = set()
+        missing_currencies = set()
+        invalid_amounts = []
+        skipped_rows = []
+
         for idx, row in enumerate(values, start=2):  # start=2 because row 1 is header
             if len(row) < 3:
+                skipped_rows.append(f"Row {idx}: Missing columns (has {len(row)}, needs 3)")
                 continue
 
             account_name = row[0].strip()
             currency_code = row[1].strip().upper()
+            amount_str = row[2].strip()
+
+            # Validate amount
             try:
-                quantity = float(row[2].replace(",", ""))
+                quantity = float(amount_str.replace(",", ""))
             except ValueError:
+                invalid_amounts.append(f"Row {idx}: Invalid amount '{amount_str}' for {account_name}/{currency_code}")
                 continue
 
+            # Check account exists
             account_id = accounts.get(account_name)
-            currency_id = currencies.get(currency_code)
+            if not account_id:
+                missing_accounts.add(account_name)
+                continue
 
-            if not account_id or not currency_id:
+            # Check currency exists
+            currency_id = currencies.get(currency_code)
+            if not currency_id:
+                missing_currencies.add(currency_code)
                 continue
 
             key = (account_id, currency_id)
@@ -422,7 +439,7 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
                 new_quantity = old_quantity + quantity
                 balance_dict[key]["quantity"] = new_quantity
                 duplicate_count += 1
-                logging.warning(
+                logging.debug(
                     f"Row {idx}: Duplicate fiat entry for {account_name} / {currency_code} "
                     f"(aggregating: {old_quantity:,.2f} + {quantity:,.2f} = {new_quantity:,.2f})"
                 )
@@ -435,8 +452,42 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
                     "source": "fiat",
                 }
 
+        # Print clean summary of issues
+        if missing_accounts or missing_currencies or invalid_amounts or skipped_rows:
+            logging.warning("\n" + "=" * 70)
+            logging.warning("FIAT BALANCE ISSUES - ACTION REQUIRED")
+            logging.warning("=" * 70)
+
+            if missing_accounts:
+                logging.warning(f"\n📋 Missing Accounts ({len(missing_accounts)}):")
+                for account in sorted(missing_accounts):
+                    logging.warning(f"  • {account}")
+                logging.warning("  → Add via: scripts/bootstrap_accounts.py")
+
+            if missing_currencies:
+                logging.warning(f"\n💱 Missing Currencies ({len(missing_currencies)}):")
+                for currency in sorted(missing_currencies):
+                    logging.warning(f"  • {currency}")
+                logging.warning("  → Add via: scripts/bootstrap_currencies.py")
+
+            if invalid_amounts:
+                logging.warning(f"\n⚠️  Invalid Amounts ({len(invalid_amounts)}):")
+                for error in invalid_amounts:
+                    logging.warning(f"  • {error}")
+                logging.warning("  → Fix amounts in Google Sheets")
+
+            if skipped_rows:
+                logging.warning(f"\n⚠️  Skipped Rows ({len(skipped_rows)}):")
+                for error in skipped_rows[:5]:  # Show first 5
+                    logging.warning(f"  • {error}")
+                if len(skipped_rows) > 5:
+                    logging.warning(f"  ... and {len(skipped_rows) - 5} more")
+                logging.warning("  → Fix formatting in Google Sheets")
+
+            logging.warning("=" * 70 + "\n")
+
         if duplicate_count > 0:
-            logging.warning(f"Aggregated {duplicate_count} duplicate fiat entries")
+            logging.info(f"✓ Aggregated {duplicate_count} duplicate entries")
 
         all_balances = list(balance_dict.values())
         logging.info(f"✓ Parsed {len(all_balances)} fiat balances")
@@ -460,14 +511,28 @@ def add_currency_ids(balances: List[Dict], db_path: str) -> List[Dict]:
     }
     conn.close()
 
+    # Track missing currencies from exchanges
+    missing_currencies = set()
+
     for balance in balances:
         if "currency_id" not in balance and "currency" in balance:
             currency_id = currencies.get(balance["currency"])
             if currency_id:
                 balance["currency_id"] = currency_id
             else:
-                logging.warning(f"Currency {balance['currency']} not found in database")
+                missing_currencies.add(balance["currency"])
                 balance["skip"] = True
+
+    # Print clean summary
+    if missing_currencies:
+        logging.warning("\n" + "=" * 70)
+        logging.warning("EXCHANGE BALANCE ISSUES - ACTION REQUIRED")
+        logging.warning("=" * 70)
+        logging.warning(f"\n💱 Missing Currencies ({len(missing_currencies)}):")
+        for currency in sorted(missing_currencies):
+            logging.warning(f"  • {currency}")
+        logging.warning("  → Add via: python scripts/bootstrap_currencies.py")
+        logging.warning("=" * 70 + "\n")
 
     return balances
 
@@ -482,10 +547,19 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
         for row in conn.execute("SELECT currency_id, rate FROM fx_rates").fetchall()
     }
 
+    # Get currency code lookup for better error messages
+    currency_codes = {
+        row["id"]: row["code"]
+        for row in conn.execute("SELECT id, code FROM currencies").fetchall()
+    }
+
     idr_currency_id = conn.execute("SELECT id FROM currencies WHERE code = 'IDR'").fetchone()
     idr_rate = fx_rates.get(idr_currency_id["id"]) if idr_currency_id else None
 
     conn.close()
+
+    # Track missing FX rates
+    missing_fx_rates = set()
 
     for balance in balances:
         if balance.get("skip"):
@@ -495,7 +569,8 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
         rate_to_usd = fx_rates.get(currency_id)
 
         if not rate_to_usd:
-            logging.warning(f"No FX rate for currency_id {currency_id}, skipping value calculation")
+            currency_code = currency_codes.get(currency_id, f"ID:{currency_id}")
+            missing_fx_rates.add(currency_code)
             balance["value_usd"] = None
             balance["value_idr"] = None
             balance["skip"] = True
@@ -511,6 +586,18 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
             balance["value_idr"] = None
 
         balance["skip"] = False
+
+    # Print clean summary of missing FX rates
+    if missing_fx_rates:
+        logging.warning("\n" + "=" * 70)
+        logging.warning("MISSING FX RATES - ACTION REQUIRED")
+        logging.warning("=" * 70)
+        logging.warning(f"\n💱 Currencies without FX rates ({len(missing_fx_rates)}):")
+        for currency in sorted(missing_fx_rates):
+            logging.warning(f"  • {currency}")
+        logging.warning("\n  → Add rates via: python scripts/ingest_fx_rates.py")
+        logging.warning("  → Or add symbol mappings first: python scripts/add_symbol_mappings.py")
+        logging.warning("=" * 70 + "\n")
 
     return balances
 
