@@ -84,10 +84,8 @@ CREATE VIEW IF NOT EXISTS currency_hierarchy AS
 SELECT
     c.id,
     c.code,
-    c.name,
     c.parent_currency_id,
-    p.code as parent_code,
-    p.name as parent_name
+    p.code as parent_code
 FROM currencies c
 LEFT JOIN currencies p ON c.parent_currency_id = p.id;
 
@@ -101,7 +99,6 @@ SELECT
     bc.is_native,
     bc.standard,
     c.code as currency_code,
-    c.name as currency_name,
     c.type as currency_type_id
 FROM blockchain_contracts bc
 JOIN currencies c ON bc.currency_id = c.id
