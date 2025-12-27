@@ -266,6 +266,63 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
     return balances
 
 
+def add_zero_balances_for_sold_assets(
+    current_balances: List[Dict],
+    db_path: str
+) -> List[Dict]:
+    """
+    Add explicit zero-balance records for currencies that were previously held
+    but are no longer in the current snapshot.
+
+    This ensures the latest_balances view doesn't show stale balances.
+
+    Args:
+        current_balances: List of current balance dictionaries
+        db_path: Database path
+
+    Returns:
+        Updated balance list with zeros for missing currencies
+    """
+    conn = sqlite3.connect(db_path)
+
+    # Get current snapshot as a set of (account_id, currency_id) tuples
+    current_holdings = {
+        (bal['account_id'], bal['currency_id'])
+        for bal in current_balances
+    }
+
+    # Get all historical holdings from latest_balances view
+    cursor = conn.execute("""
+        SELECT DISTINCT account_id, currency_id, currency_code
+        FROM latest_balances
+        WHERE quantity != 0
+    """)
+
+    historical_holdings = {(row[0], row[1]): row[2] for row in cursor.fetchall()}
+    conn.close()
+
+    # Find holdings that were in history but not in current snapshot
+    sold_holdings = set(historical_holdings.keys()) - current_holdings
+
+    if sold_holdings:
+        logging.info(f"Found {len(sold_holdings)} previously held currencies now at zero")
+
+        # Add zero balance records
+        for account_id, currency_id in sold_holdings:
+            currency_code = historical_holdings[(account_id, currency_id)]
+            current_balances.append({
+                'account_id': account_id,
+                'currency_id': currency_id,
+                'currency_code': currency_code,
+                'quantity': 0.0,
+                'value_usd': 0.0,
+                'value_idr': 0.0,
+            })
+            logging.info(f"  Adding zero balance: account_id={account_id}, {currency_code}")
+
+    return current_balances
+
+
 def insert_balances(balances: List[Dict], db_path: str, timestamp: datetime) -> int:
     """
     Insert balance snapshot into database.
@@ -371,6 +428,10 @@ def main():
             # Calculate values
             logger.info("Calculating USD and IDR values...")
             balances = calculate_values(balances, str(db_path))
+
+            # Add zero balances for previously held assets that are now gone
+            logger.info("Checking for sold/transferred assets...")
+            balances = add_zero_balances_for_sold_assets(balances, str(db_path))
 
             # Insert snapshot
             snapshot_time = datetime.now()

@@ -10,69 +10,10 @@ Usage:
     python scripts/bootstrap_blockchain_mappings.py [database_path]
 """
 
-import sys
 import sqlite3
-from pathlib import Path
+import sys
 from datetime import datetime
-
-
-def setup_parent_relationships(conn):
-    """Set up parent-child currency relationships for price inheritance."""
-    cursor = conn.cursor()
-
-    # Format: (child_code, parent_code)
-    # Child currencies will inherit prices from parent currencies
-    relationships = [
-        # Binance Liquid Staking tokens → underlying assets
-        ("LDBNB", "BNB"),
-        ("LDBTC", "BTC"),
-        ("LDETH", "ETH"),
-        ("LDUSDT", "USDT"),
-        ("LDUSDC", "USDC"),
-        ("LDLINK", "LINK"),
-        ("LDADA", "ADA"),
-        ("LDATOM", "ATOM"),
-        ("LDDOT", "DOT"),
-        ("LDPAXG", "PAXG"),
-        ("LDPOL", "POL"),
-    ]
-
-    updated = 0
-    missing = 0
-
-    print("\n" + "=" * 70)
-    print("Setting up parent-child currency relationships")
-    print("=" * 70)
-
-    for child_code, parent_code in relationships:
-        # Get parent currency ID
-        cursor.execute("SELECT id FROM currencies WHERE code = ?", (parent_code,))
-        parent_result = cursor.fetchone()
-
-        if not parent_result:
-            print(f"⊘ {child_code:12} → {parent_code:12} - Parent not found")
-            missing += 1
-            continue
-
-        parent_id = parent_result[0]
-
-        # Update child currency
-        cursor.execute("""
-            UPDATE currencies
-            SET parent_currency_id = ?
-            WHERE code = ?
-        """, (parent_id, child_code))
-
-        if cursor.rowcount > 0:
-            print(f"✓ {child_code:12} → {parent_code:12} - Linked for price inheritance")
-            updated += 1
-        else:
-            print(f"⊘ {child_code:12} → {parent_code:12} - Child not found")
-            missing += 1
-
-    conn.commit()
-    print(f"Summary: {updated} relationships set, {missing} missing")
-    return updated
+from pathlib import Path
 
 
 def setup_blockchain_contracts(conn):
@@ -88,30 +29,24 @@ def setup_blockchain_contracts(conn):
         ("USDT", "ethereum", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6, 0, "ERC-20"),
         ("LINK", "ethereum", "0x514910771AF9Ca656af840dff83E8264EcF986CA", 18, 0, "ERC-20"),
         ("UNI", "ethereum", "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", 18, 0, "ERC-20"),
-
         # BNB Smart Chain (BSC)
         ("BNB", "bsc", None, 18, 1, "Native"),
         ("USDC", "bsc", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18, 0, "BEP-20"),
         ("USDT", "bsc", "0x55d398326f99059fF775485246999027B3197955", 18, 0, "BEP-20"),
-
         # Polygon
         ("POL", "polygon", None, 18, 1, "Native"),  # MATIC → POL rebrand
         ("USDC", "polygon", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6, 0, "ERC-20"),
         ("USDT", "polygon", "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", 6, 0, "ERC-20"),
-
         # Arbitrum
         ("ETH", "arbitrum", None, 18, 1, "Native"),
         ("USDC", "arbitrum", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", 6, 0, "ERC-20"),
         ("USDT", "arbitrum", "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", 6, 0, "ERC-20"),
-
         # Optimism
         ("ETH", "optimism", None, 18, 1, "Native"),
         ("USDC", "optimism", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", 6, 0, "ERC-20"),
-
         # Base
         ("ETH", "base", None, 18, 1, "Native"),
         ("USDC", "base", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", 6, 0, "ERC-20"),
-
         # Solana
         ("SOL", "solana", None, 9, 1, "Native"),
         ("USDC", "solana", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6, 0, "SPL"),
@@ -139,10 +74,13 @@ def setup_blockchain_contracts(conn):
         currency_id = result[0]
 
         # Check if mapping already exists
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id FROM blockchain_contracts
             WHERE currency_id = ? AND network = ?
-        """, (currency_id, network))
+        """,
+            (currency_id, network),
+        )
 
         if cursor.fetchone():
             print(f"⊘ {currency_code:8} on {network:10} - Already exists")
@@ -150,13 +88,23 @@ def setup_blockchain_contracts(conn):
             continue
 
         # Insert contract
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO blockchain_contracts (
                 currency_id, network, contract_address, decimals,
                 is_native, standard, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (currency_id, network, contract_address, decimals, is_native,
-              standard, datetime.now().isoformat()))
+        """,
+            (
+                currency_id,
+                network,
+                contract_address,
+                decimals,
+                is_native,
+                standard,
+                datetime.now().isoformat(),
+            ),
+        )
 
         addr_display = contract_address[:10] + "..." if contract_address else "Native"
         print(f"✓ {currency_code:8} on {network:10} - {addr_display} ({standard})")
@@ -204,13 +152,23 @@ def setup_networks(conn):
 
         # Insert network
         chain_id_str = f"Chain ID: {chain_id}" if chain_id else "Non-EVM"
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO networks (
                 code, name, chain_id, native_currency_id,
                 explorer_url, is_evm, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (code, name, chain_id, native_currency_id, explorer_url, is_evm,
-              datetime.now().isoformat()))
+        """,
+            (
+                code,
+                name,
+                chain_id,
+                native_currency_id,
+                explorer_url,
+                is_evm,
+                datetime.now().isoformat(),
+            ),
+        )
 
         print(f"✓ {code:12} - {name:20} ({chain_id_str})")
         inserted += 1

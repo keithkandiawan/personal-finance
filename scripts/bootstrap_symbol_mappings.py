@@ -9,10 +9,10 @@ Usage:
     python scripts/add_symbol_mappings.py [database_path]
 """
 
-import sys
 import sqlite3
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
 def add_symbol_mappings(db_path: str):
@@ -27,8 +27,7 @@ def add_symbol_mappings(db_path: str):
     mappings = [
         # Major Stablecoins (pegged to USD)
         ("USDC", "BINANCE:USDCUSDT", 0, 1),  # ~1.00 USD
-        ("USDT", "BINANCE:USDTUSD", 0, 1),   # ~1.00 USD
-
+        ("USDT", "BINANCE:USDTUSD", 0, 1),  # ~1.00 USD
         # Major Cryptocurrencies
         ("BTC", "BINANCE:BTCUSDT", 0, 1),
         ("ETH", "BINANCE:ETHUSDT", 0, 1),
@@ -41,28 +40,9 @@ def add_symbol_mappings(db_path: str):
         ("NEAR", "BINANCE:NEARUSDT", 0, 1),
         ("POL", "BINANCE:POLUSDT", 0, 1),
         ("PAXG", "BINANCE:PAXGUSDT", 0, 1),
-
         # Exchange Tokens
-        ("OKB", "BINANCE:OKBUSDT", 0, 1),
-
-        # Binance Liquid Staking Tokens
-        # Note: LD tokens typically track 1:1 with underlying asset
-        ("LDBNB", "BINANCE:BNBUSDT", 0, 1),   # Use underlying asset price
-        ("LDBTC", "BINANCE:BTCUSDT", 0, 1),
-        ("LDETH", "BINANCE:ETHUSDT", 0, 1),
-        ("LDUSDT", "BINANCE:USDTUSD", 0, 1),
-        ("LDUSDC", "BINANCE:USDCUSDT", 0, 1),
-        ("LDLINK", "BINANCE:LINKUSDT", 0, 1),
-        ("LDADA", "BINANCE:ADAUSDT", 0, 1),
-        ("LDATOM", "BINANCE:ATOMUSDT", 0, 1),
-        ("LDDOT", "BINANCE:DOTUSDT", 0, 1),
-        ("LDPAXG", "BINANCE:PAXGUSDT", 0, 1),
-        ("LDPOL", "BINANCE:POLUSDT", 0, 1),
-
-        # Other Tokens - using common pairs where available
-        ("SOLO", "BINANCE:SOLOUSDT", 0, 1),
-        ("MORPHO", "COINBASE:MORPHOUSD", 0, 1),
-        ("EUL", "BINANCE:EULUSDT", 0, 1),
+        ("OKB", "OKX:OKBUSDT", 0, 1),
+        ("IDR", "FX_IDC:USDIDR", 1, 1),
     ]
 
     inserted = 0
@@ -87,10 +67,13 @@ def add_symbol_mappings(db_path: str):
             currency_id = result[0]
 
             # Check if mapping already exists
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id FROM symbol_mappings
                 WHERE currency_id = ? AND source = 'tradingview'
-            """, (currency_id,))
+            """,
+                (currency_id,),
+            )
 
             if cursor.fetchone():
                 print(f"⊘ {currency_code:12} - Mapping already exists")
@@ -98,12 +81,21 @@ def add_symbol_mappings(db_path: str):
                 continue
 
             # Insert mapping
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO symbol_mappings (
                     currency_id, source, symbol, is_inverted, is_primary, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (currency_id, "tradingview", tv_symbol, is_inverted, is_primary,
-                  datetime.now().isoformat()))
+            """,
+                (
+                    currency_id,
+                    "tradingview",
+                    tv_symbol,
+                    is_inverted,
+                    is_primary,
+                    datetime.now().isoformat(),
+                ),
+            )
 
             invert_note = " (inverted)" if is_inverted else ""
             print(f"✓ {currency_code:12} → {tv_symbol}{invert_note}")

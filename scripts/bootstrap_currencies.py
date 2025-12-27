@@ -9,10 +9,10 @@ Usage:
     python scripts/bootstrap_currencies.py [database_path]
 """
 
-import sys
 import sqlite3
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
 def bootstrap_currencies(db_path: str):
@@ -28,13 +28,17 @@ def bootstrap_currencies(db_path: str):
     cursor.execute("SELECT id FROM currency_types WHERE name = 'stablecoin'")
     stablecoin_type_id = cursor.fetchone()[0]
 
+    cursor.execute("SELECT id FROM currency_types WHERE name = 'fiat'")
+    fiat_type_id = cursor.fetchone()[0]
+
     # Define currencies to add
     # Format: (code, type_id)
     currencies = [
+        ("IDR", fiat_type_id),
+        ("USD", fiat_type_id),
         # Major Stablecoins
         ("USDC", stablecoin_type_id),
         ("USDT", stablecoin_type_id),
-
         # Major Cryptocurrencies
         ("BTC", crypto_type_id),
         ("ETH", crypto_type_id),
@@ -47,35 +51,9 @@ def bootstrap_currencies(db_path: str):
         ("NEAR", crypto_type_id),
         ("POL", crypto_type_id),
         ("PAXG", crypto_type_id),
-
         # Exchange Tokens
         ("OKB", crypto_type_id),
-
-        # Binance Liquid Staking Tokens
-        ("LDBNB", crypto_type_id),
-        ("LDBTC", crypto_type_id),
-        ("LDETH", crypto_type_id),
-        ("LDUSDT", crypto_type_id),
-        ("LDUSDC", crypto_type_id),
-        ("LDLINK", crypto_type_id),
-        ("LDADA", crypto_type_id),
-        ("LDATOM", crypto_type_id),
-        ("LDDOT", crypto_type_id),
-        ("LDPAXG", crypto_type_id),
-        ("LDPOL", crypto_type_id),
-        ("LDS", crypto_type_id),
-
-        # Other Tokens (from your balances)
-        ("SOLO", crypto_type_id),
-        ("MORPHO", crypto_type_id),
-        ("WAL", crypto_type_id),
-        ("EUL", crypto_type_id),
-        ("ENSO", crypto_type_id),
-        ("YB", crypto_type_id),
-        ("ZBT", crypto_type_id),
-        ("TURTLE", crypto_type_id),
         ("S", crypto_type_id),
-        ("2Z", crypto_type_id),
     ]
 
     inserted = 0
@@ -95,10 +73,13 @@ def bootstrap_currencies(db_path: str):
                 continue
 
             # Insert currency
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO currencies (code, type)
                 VALUES (?, ?)
-            """, (code, type_id))
+            """,
+                (code, type_id),
+            )
 
             print(f"✓ {code:12} - Added")
             inserted += 1

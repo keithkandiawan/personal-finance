@@ -16,22 +16,21 @@ Example cron (every 4 hours):
     0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_crypto_balances.py >> logs/crypto_balances.log 2>&1
 """
 
-import sys
-import sqlite3
+import fcntl
 import logging
 import os
-from pathlib import Path
+import sqlite3
+import sys
 from datetime import datetime
-from typing import List, Dict
-import fcntl
+from pathlib import Path
+from typing import Dict, List
 
 from dotenv import load_dotenv
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from portfolio.exchanges import create_exchange, Balance
-
+from portfolio.exchanges import Balance, create_exchange
 
 # Load environment
 load_dotenv()
@@ -42,8 +41,7 @@ def setup_logging(log_dir: Path):
     log_dir.mkdir(parents=True, exist_ok=True)
 
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     log_file = log_dir / f"crypto_balances_{datetime.now().strftime('%Y%m')}.log"
@@ -65,13 +63,14 @@ def setup_logging(log_dir: Path):
 
 class LockFile:
     """Context manager for file-based locking."""
+
     def __init__(self, lock_path: Path):
         self.lock_path = lock_path
         self.lock_file = None
 
     def __enter__(self):
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self.lock_file = open(self.lock_path, 'w')
+        self.lock_file = open(self.lock_path, "w")
         try:
             fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.lock_file.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
@@ -79,9 +78,7 @@ class LockFile:
             return self
         except IOError:
             self.lock_file.close()
-            raise RuntimeError(
-                f"Another instance is already running (lock file: {self.lock_path})"
-            )
+            raise RuntimeError(f"Another instance is already running (lock file: {self.lock_path})")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lock_file:
@@ -103,29 +100,33 @@ def get_exchange_config() -> Dict:
     exchanges = {}
 
     # Binance
-    if os.getenv('BINANCE_API_KEY') and os.getenv('BINANCE_API_SECRET'):
-        exchanges['Binance'] = {
-            'exchange': 'binance',
-            'api_key': os.getenv('BINANCE_API_KEY'),
-            'api_secret': os.getenv('BINANCE_API_SECRET'),
+    if os.getenv("BINANCE_API_KEY") and os.getenv("BINANCE_API_SECRET"):
+        exchanges["Binance"] = {
+            "exchange": "binance",
+            "api_key": os.getenv("BINANCE_API_KEY"),
+            "api_secret": os.getenv("BINANCE_API_SECRET"),
         }
 
     # OKX
-    if os.getenv('OKX_API_KEY') and os.getenv('OKX_API_SECRET') and os.getenv('OKX_API_PASSWORD'):
-        exchanges['OKX'] = {
-            'exchange': 'okx',
-            'api_key': os.getenv('OKX_API_KEY'),
-            'api_secret': os.getenv('OKX_API_SECRET'),
-            'password': os.getenv('OKX_API_PASSWORD'),
+    if os.getenv("OKX_API_KEY") and os.getenv("OKX_API_SECRET") and os.getenv("OKX_API_PASSWORD"):
+        exchanges["OKX"] = {
+            "exchange": "okx",
+            "api_key": os.getenv("OKX_API_KEY"),
+            "api_secret": os.getenv("OKX_API_SECRET"),
+            "password": os.getenv("OKX_API_PASSWORD"),
         }
 
     # Bitget
-    if os.getenv('BITGET_API_KEY') and os.getenv('BITGET_API_SECRET') and os.getenv('BITGET_API_PASSWORD'):
-        exchanges['Bitget Evelyn'] = {
-            'exchange': 'bitget',
-            'api_key': os.getenv('BITGET_API_KEY'),
-            'api_secret': os.getenv('BITGET_API_SECRET'),
-            'password': os.getenv('BITGET_API_PASSWORD'),
+    if (
+        os.getenv("BITGET_API_KEY")
+        and os.getenv("BITGET_API_SECRET")
+        and os.getenv("BITGET_API_PASSWORD")
+    ):
+        exchanges["Bitget Evelyn"] = {
+            "exchange": "bitget",
+            "api_key": os.getenv("BITGET_API_KEY"),
+            "api_secret": os.getenv("BITGET_API_SECRET"),
+            "password": os.getenv("BITGET_API_PASSWORD"),
         }
 
     return exchanges
@@ -144,11 +145,11 @@ def fetch_exchange_balances(account_name: str, config: Dict) -> List[Balance]:
     """
     try:
         adapter = create_exchange(
-            exchange_name=config['exchange'],
-            api_key=config['api_key'],
-            api_secret=config['api_secret'],
-            password=config.get('password'),
-            testnet=False
+            exchange_name=config["exchange"],
+            api_key=config["api_key"],
+            api_secret=config["api_secret"],
+            password=config.get("password"),
+            testnet=False,
         )
 
         balances = adapter.fetch_balances()
@@ -160,10 +161,7 @@ def fetch_exchange_balances(account_name: str, config: Dict) -> List[Balance]:
         return []
 
 
-def calculate_values(
-    balances: List[Dict],
-    db_path: str
-) -> List[Dict]:
+def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
     """
     Calculate USD and IDR values using FX rates.
 
@@ -178,61 +176,120 @@ def calculate_values(
     conn.row_factory = sqlite3.Row
 
     # Get FX rates
-    fx_rates = {row['currency_id']: row['rate'] for row in
-                conn.execute("SELECT currency_id, rate FROM fx_rates").fetchall()}
+    fx_rates = {
+        row["currency_id"]: row["rate"]
+        for row in conn.execute("SELECT currency_id, rate FROM fx_rates").fetchall()
+    }
 
     # Get IDR rate
-    idr_currency_id = conn.execute(
-        "SELECT id FROM currencies WHERE code = 'IDR'"
-    ).fetchone()
-    idr_rate = fx_rates.get(idr_currency_id['id']) if idr_currency_id else None
+    idr_currency_id = conn.execute("SELECT id FROM currencies WHERE code = 'IDR'").fetchone()
+    idr_rate = fx_rates.get(idr_currency_id["id"]) if idr_currency_id else None
 
     # Get currency IDs
-    currencies = {row['code']: row['id'] for row in
-                  conn.execute("SELECT id, code FROM currencies").fetchall()}
+    currencies = {
+        row["code"]: row["id"] for row in conn.execute("SELECT id, code FROM currencies").fetchall()
+    }
 
     conn.close()
 
     for balance in balances:
-        currency_code = balance['currency']
+        currency_code = balance["currency"]
         currency_id = currencies.get(currency_code)
 
         if not currency_id:
             logging.warning(f"Currency {currency_code} not in database, skipping")
-            balance['skip'] = True
+            balance["skip"] = True
             continue
 
-        balance['currency_id'] = currency_id
+        balance["currency_id"] = currency_id
 
         # Get FX rate
         rate_to_usd = fx_rates.get(currency_id)
         if not rate_to_usd:
             logging.warning(f"No FX rate for {currency_code}, skipping value calculation")
-            balance['value_usd'] = None
-            balance['value_idr'] = None
-            balance['skip'] = True
+            balance["value_usd"] = None
+            balance["value_idr"] = None
+            balance["skip"] = True
             continue
 
         # Calculate values
-        quantity = balance['quantity']
+        quantity = balance["quantity"]
         value_usd = quantity * rate_to_usd
-        balance['value_usd'] = value_usd
+        balance["value_usd"] = value_usd
 
         if idr_rate:
-            balance['value_idr'] = value_usd / idr_rate
+            balance["value_idr"] = value_usd / idr_rate
         else:
-            balance['value_idr'] = None
+            balance["value_idr"] = None
 
-        balance['skip'] = False
+        balance["skip"] = False
 
     return balances
 
 
-def insert_balances(
-    balances: List[Dict],
-    db_path: str,
-    timestamp: datetime
-) -> int:
+def add_zero_balances_for_sold_assets(
+    current_balances: List[Dict], accounts: Dict[str, int], db_path: str
+) -> List[Dict]:
+    """
+    Add explicit zero-balance records for currencies that were previously held
+    but are no longer in the current snapshot (i.e., sold/transferred out).
+
+    This ensures the latest_balances view doesn't show stale balances.
+
+    Args:
+        current_balances: List of current balance dictionaries
+        accounts: Dict of account_name -> account_id
+        db_path: Database path
+
+    Returns:
+        Updated balance list with zeros for missing currencies
+    """
+    conn = sqlite3.connect(db_path)
+
+    # Get current snapshot as a set of (account_id, currency_code) tuples
+    current_holdings = {(bal["account_id"], bal["currency"]) for bal in current_balances}
+
+    # Get all historical holdings for these accounts
+    account_ids = tuple(accounts.values())
+    cursor = conn.execute(
+        f"""
+        SELECT DISTINCT account_id, currency_code
+        FROM latest_balances
+        WHERE account_id IN ({",".join("?" * len(account_ids))})
+          AND quantity > 0
+    """,
+        account_ids,
+    )
+
+    historical_holdings = set(cursor.fetchall())
+    conn.close()
+
+    # Find currencies that were held before but not in current snapshot
+    sold_holdings = historical_holdings - current_holdings
+
+    if sold_holdings:
+        logging.info(f"Found {len(sold_holdings)} previously held currencies now at zero")
+
+        # Get account_name lookup
+        id_to_name = {v: k for k, v in accounts.items()}
+
+        # Add zero balance records
+        for account_id, currency_code in sold_holdings:
+            account_name = id_to_name.get(account_id, "Unknown")
+            current_balances.append(
+                {
+                    "account_id": account_id,
+                    "account_name": account_name,
+                    "currency": currency_code,
+                    "quantity": 0.0,
+                }
+            )
+            logging.info(f"  Adding zero balance: {account_name} - {currency_code}")
+
+    return current_balances
+
+
+def insert_balances(balances: List[Dict], db_path: str, timestamp: datetime) -> int:
     """Insert balance snapshot into database."""
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -241,22 +298,25 @@ def insert_balances(
 
     try:
         for balance in balances:
-            if balance.get('skip'):
+            if balance.get("skip"):
                 continue
 
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO balances (
                     timestamp, account_id, currency_id,
                     quantity, value_idr, value_usd
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                timestamp.isoformat(),
-                balance['account_id'],
-                balance['currency_id'],
-                balance['quantity'],
-                balance['value_idr'],
-                balance['value_usd']
-            ))
+            """,
+                (
+                    timestamp.isoformat(),
+                    balance["account_id"],
+                    balance["currency_id"],
+                    balance["quantity"],
+                    balance["value_idr"],
+                    balance["value_usd"],
+                ),
+            )
             inserted += 1
 
         conn.commit()
@@ -305,8 +365,12 @@ def main():
 
             # Get account IDs from database
             conn = sqlite3.connect(db_path)
-            accounts = {row[0]: row[1] for row in
-                       conn.execute("SELECT name, id FROM accounts WHERE is_active = 1").fetchall()}
+            accounts = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT name, id FROM accounts WHERE is_active = 1"
+                ).fetchall()
+            }
             conn.close()
 
             # Fetch balances from all exchanges
@@ -323,18 +387,24 @@ def main():
                 balances = fetch_exchange_balances(account_name, config)
 
                 for balance in balances:
-                    all_balances.append({
-                        'account_id': account_id,
-                        'account_name': account_name,
-                        'currency': balance.currency,
-                        'quantity': balance.total,
-                    })
+                    all_balances.append(
+                        {
+                            "account_id": account_id,
+                            "account_name": account_name,
+                            "currency": balance.currency,
+                            "quantity": balance.total,
+                        }
+                    )
 
             if not all_balances:
                 logger.warning("No balances fetched from any exchange")
                 sys.exit(0)
 
             logger.info(f"Total balances fetched: {len(all_balances)}")
+
+            # Add zero balances for previously held assets that are now gone
+            logger.info("Checking for sold/transferred assets...")
+            all_balances = add_zero_balances_for_sold_assets(all_balances, accounts, str(db_path))
 
             # Calculate values
             logger.info("Calculating USD and IDR values...")
