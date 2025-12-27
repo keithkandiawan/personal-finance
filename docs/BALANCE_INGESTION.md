@@ -11,9 +11,11 @@ The portfolio system tracks balances from three sources:
 
 ## Recommended Workflow
 
-### Use the Unified Script (Recommended)
+### Use the Unified Script ⭐ (Recommended)
 
-The unified script `scripts/ingest_balances.py` handles all sources and correctly manages zero-balance tracking:
+**The unified script `scripts/ingest_balances.py` is the recommended way to ingest balances.**
+
+It handles all sources and correctly manages zero-balance tracking:
 
 ```bash
 # Ingest from ALL sources (recommended - creates atomic snapshot)
@@ -30,9 +32,11 @@ python scripts/ingest_balances.py --sources fiat
 - Zero-balance logic ONLY when running all sources (prevents stale balances)
 - No zero-balance logic when running individual sources (prevents incorrect zeros)
 
-### Individual Scripts (Legacy)
+### Individual Scripts (⚠️ Deprecated - Legacy Only)
 
-The individual scripts are still available but DON'T use zero-balance logic:
+**These scripts are deprecated.** They're kept for backward compatibility but will show a deprecation warning.
+
+Use the unified script instead for all new workflows:
 
 ```bash
 # Exchange balances only (no zero-balance logic)

@@ -258,7 +258,8 @@ def fetch_wallet_balances(db_path: str) -> List[Dict]:
         network = row["network"]
         if network not in contracts_by_network:
             contracts_by_network[network] = {}
-        contracts_by_network[network][row["contract_address"]] = (
+        # Normalize address to lowercase for consistent lookups
+        contracts_by_network[network][row["contract_address"].lower()] = (
             row["currency_id"],
             row["decimals"],
         )
@@ -392,34 +393,52 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
         }
         conn.close()
 
-        # Parse balances
-        all_balances = []
+        # Parse balances - aggregate duplicates
+        balance_dict = {}  # (account_id, currency_id) -> balance info
+        duplicate_count = 0
 
-        for row in values:
+        for idx, row in enumerate(values, start=2):  # start=2 because row 1 is header
             if len(row) < 3:
                 continue
 
             account_name = row[0].strip()
             currency_code = row[1].strip().upper()
             try:
-                quantity = float(row[2])
+                quantity = float(row[2].replace(",", ""))
             except ValueError:
                 continue
 
             account_id = accounts.get(account_name)
             currency_id = currencies.get(currency_code)
 
-            if account_id and currency_id and quantity != 0:
-                all_balances.append(
-                    {
-                        "account_id": account_id,
-                        "account_name": account_name,
-                        "currency_id": currency_id,
-                        "quantity": quantity,
-                        "source": "fiat",
-                    }
-                )
+            if not account_id or not currency_id:
+                continue
 
+            key = (account_id, currency_id)
+
+            # Aggregate duplicates
+            if key in balance_dict:
+                old_quantity = balance_dict[key]["quantity"]
+                new_quantity = old_quantity + quantity
+                balance_dict[key]["quantity"] = new_quantity
+                duplicate_count += 1
+                logging.warning(
+                    f"Row {idx}: Duplicate fiat entry for {account_name} / {currency_code} "
+                    f"(aggregating: {old_quantity:,.2f} + {quantity:,.2f} = {new_quantity:,.2f})"
+                )
+            else:
+                balance_dict[key] = {
+                    "account_id": account_id,
+                    "account_name": account_name,
+                    "currency_id": currency_id,
+                    "quantity": quantity,
+                    "source": "fiat",
+                }
+
+        if duplicate_count > 0:
+            logging.warning(f"Aggregated {duplicate_count} duplicate fiat entries")
+
+        all_balances = list(balance_dict.values())
         logging.info(f"✓ Parsed {len(all_balances)} fiat balances")
         return all_balances
 
@@ -507,7 +526,10 @@ def add_zero_balances_for_sold_assets(
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
-    current_holdings = {(bal["account_id"], bal["currency_id"]) for bal in current_balances}
+    # Filter out balances that should be skipped (missing currency_id, etc.)
+    valid_balances = [bal for bal in current_balances if not bal.get("skip")]
+
+    current_holdings = {(bal["account_id"], bal["currency_id"]) for bal in valid_balances}
 
     cursor = conn.execute(
         """
@@ -542,13 +564,35 @@ def insert_balances(balances: List[Dict], db_path: str, timestamp: datetime) -> 
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
 
+    # Deduplicate: aggregate balances by (account_id, currency_id)
+    balance_dict = {}
+
+    for balance in balances:
+        if balance.get("skip"):
+            continue
+
+        key = (balance["account_id"], balance["currency_id"])
+
+        if key in balance_dict:
+            # Duplicate - sum quantities and recalculate values
+            old_qty = balance_dict[key]["quantity"]
+            new_qty = old_qty + balance["quantity"]
+            balance_dict[key]["quantity"] = new_qty
+
+            # Recalculate values (assuming value_usd per unit is same)
+            if balance.get("value_usd") and old_qty != 0:
+                rate = balance_dict[key]["value_usd"] / old_qty
+                balance_dict[key]["value_usd"] = new_qty * rate
+                if balance.get("value_idr"):
+                    idr_rate = balance_dict[key]["value_idr"] / old_qty
+                    balance_dict[key]["value_idr"] = new_qty * idr_rate
+        else:
+            balance_dict[key] = balance.copy()
+
     inserted = 0
 
     try:
-        for balance in balances:
-            if balance.get("skip"):
-                continue
-
+        for balance in balance_dict.values():
             conn.execute(
                 """
                 INSERT INTO balances (
