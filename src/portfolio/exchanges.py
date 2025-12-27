@@ -256,6 +256,56 @@ class OKXAdapter(ExchangeAdapter):
         except Exception as e:
             logger.debug(f"  OKX earn: Not accessible ({e})")
 
+        # Fetch from Staking - get ACTIVE positions (not offers)
+        staking_count = 0
+
+        try:
+            # Get active staking positions
+            if hasattr(self.exchange, "privateGetFinanceStakingDefiOrdersActive"):
+                staking_data = self.exchange.privateGetFinanceStakingDefiOrdersActive()
+
+                if "data" in staking_data and staking_data["data"]:
+                    for order in staking_data["data"]:
+                        currency = order.get("ccy")
+
+                        # Get staked amount from investData
+                        if "investData" in order:
+                            for invest in order.get("investData", []):
+                                amount = float(invest.get("amt", 0))
+
+                                if amount > 0 and currency:
+                                    if currency not in aggregated:
+                                        aggregated[currency] = {"total": 0, "free": 0, "used": 0}
+
+                                    aggregated[currency]["total"] += amount
+                                    aggregated[currency]["used"] += amount  # Staked funds are locked
+                                    staking_count += 1
+        except Exception as e:
+            logger.debug(f"  OKX staking: {e}")
+
+        # Try ETH 2.0 staking
+        try:
+            if hasattr(self.exchange, "privateGetFinanceStakingDefiEthBalance"):
+                eth_staking = self.exchange.privateGetFinanceStakingDefiEthBalance()
+
+                if "data" in eth_staking:
+                    for position in eth_staking["data"]:
+                        currency = position.get("ccy", "BETH")
+                        amount = float(position.get("amt", 0))
+
+                        if amount > 0:
+                            if currency not in aggregated:
+                                aggregated[currency] = {"total": 0, "free": 0, "used": 0}
+
+                            aggregated[currency]["total"] += amount
+                            aggregated[currency]["used"] += amount
+                            staking_count += 1
+        except Exception as e:
+            logger.debug(f"  OKX ETH staking: {e}")
+
+        if staking_count > 0:
+            logger.info(f"  OKX staking: {staking_count} positions")
+
         # Convert aggregated dict to Balance objects
         balances = [
             Balance(
