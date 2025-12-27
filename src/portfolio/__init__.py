@@ -13,8 +13,21 @@ from .tradingview import (
     get_tradingview_symbols,
 )
 
+from .exchanges import (
+    create_exchange,
+    BinanceAdapter,
+    OKXAdapter,
+    BitgetAdapter,
+    Balance,
+)
+
 __all__ = [
     "fetch_and_update_prices",
     "check_stale_rates",
     "get_tradingview_symbols",
+    "create_exchange",
+    "BinanceAdapter",
+    "OKXAdapter",
+    "BitgetAdapter",
+    "Balance",
 ]
