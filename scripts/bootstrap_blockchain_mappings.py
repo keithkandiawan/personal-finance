@@ -29,10 +29,12 @@ def setup_blockchain_contracts(conn):
         ("USDT", "ethereum", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6, 0, "ERC-20"),
         ("LINK", "ethereum", "0x514910771AF9Ca656af840dff83E8264EcF986CA", 18, 0, "ERC-20"),
         ("UNI", "ethereum", "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", 18, 0, "ERC-20"),
+        ("XAUT", "ethereum", "0x68749665FF8D2d112Fa859AA293F07A622782F38", 6, 0, "ERC-20"),
         # BNB Smart Chain (BSC)
         ("BNB", "bsc", None, 18, 1, "Native"),
         ("USDC", "bsc", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18, 0, "BEP-20"),
         ("USDT", "bsc", "0x55d398326f99059fF775485246999027B3197955", 18, 0, "BEP-20"),
+        ("ASTER", "bsc", "0x000Ae314E2A2172a039B26378814C252734f556A", 18, 0, "BEP-20"),
         # Polygon
         ("POL", "polygon", None, 18, 1, "Native"),  # MATIC → POL rebrand
         ("USDC", "polygon", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6, 0, "ERC-20"),
@@ -205,7 +207,6 @@ def main():
 
     # Run all setups
     setup_networks(conn)
-    setup_parent_relationships(conn)
     setup_blockchain_contracts(conn)
 
     conn.close()

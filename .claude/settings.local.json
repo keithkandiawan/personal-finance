@@ -11,7 +11,8 @@
       "Bash(python scripts/add_symbol_mappings.py:*)",
       "Bash(python scripts/bootstrap_blockchain_mappings.py:*)",
       "Bash(python scripts/ingest_crypto_balances.py:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python scripts/ingest_onchain_balances.py:*)"
     ]
   }
 }

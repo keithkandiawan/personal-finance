@@ -51,6 +51,8 @@ def bootstrap_currencies(db_path: str):
         ("NEAR", crypto_type_id),
         ("POL", crypto_type_id),
         ("PAXG", crypto_type_id),
+        ("XAUT", crypto_type_id),
+        ("ASTER", crypto_type_id),
         # Exchange Tokens
         ("OKB", crypto_type_id),
         ("S", crypto_type_id),

@@ -375,6 +375,7 @@ def main():
 
             # Fetch balances from all exchanges
             all_balances = []
+            processed_accounts = {}  # Track only accounts actually processed
 
             for account_name, config in exchange_configs.items():
                 if account_name not in accounts:
@@ -382,6 +383,7 @@ def main():
                     continue
 
                 account_id = accounts[account_name]
+                processed_accounts[account_name] = account_id  # Track this account
                 logger.info(f"Fetching from {account_name}...")
 
                 balances = fetch_exchange_balances(account_name, config)
@@ -402,9 +404,8 @@ def main():
 
             logger.info(f"Total balances fetched: {len(all_balances)}")
 
-            # Add zero balances for previously held assets that are now gone
-            logger.info("Checking for sold/transferred assets...")
-            all_balances = add_zero_balances_for_sold_assets(all_balances, accounts, str(db_path))
+            # NOTE: Zero-balance logic removed - use scripts/ingest_balances.py --sources all
+            # to get complete snapshot with zero-balance tracking
 
             # Calculate values
             logger.info("Calculating USD and IDR values...")

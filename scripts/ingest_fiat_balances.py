@@ -19,22 +19,22 @@ Example cron (daily at 8 AM):
     0 8 * * * cd /path/to/personal-finance && python scripts/ingest_fiat_balances.py >> logs/fiat_balances.log 2>&1
 """
 
-import sys
-import sqlite3
-import logging
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Tuple, Optional
 import fcntl
+import logging
 import os
+import sqlite3
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+# Environment variables
+from dotenv import load_dotenv
 
 # Google Sheets
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
-# Environment variables
-from dotenv import load_dotenv
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -49,8 +49,7 @@ def setup_logging(log_dir: Path):
     log_dir.mkdir(parents=True, exist_ok=True)
 
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     log_file = log_dir / f"fiat_balances_{datetime.now().strftime('%Y%m')}.log"
@@ -72,13 +71,14 @@ def setup_logging(log_dir: Path):
 
 class LockFile:
     """Context manager for file-based locking."""
+
     def __init__(self, lock_path: Path):
         self.lock_path = lock_path
         self.lock_file = None
 
     def __enter__(self):
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self.lock_file = open(self.lock_path, 'w')
+        self.lock_file = open(self.lock_path, "w")
         try:
             fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.lock_file.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
@@ -86,9 +86,7 @@ class LockFile:
             return self
         except IOError:
             self.lock_file.close()
-            raise RuntimeError(
-                f"Another instance is already running (lock file: {self.lock_path})"
-            )
+            raise RuntimeError(f"Another instance is already running (lock file: {self.lock_path})")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lock_file:
@@ -114,19 +112,15 @@ def read_google_sheet(credentials_path: str, sheet_id: str, range_name: str) -> 
     """
     try:
         credentials = service_account.Credentials.from_service_account_file(
-            credentials_path,
-            scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
+            credentials_path, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
         )
 
-        service = build('sheets', 'v4', credentials=credentials)
+        service = build("sheets", "v4", credentials=credentials)
         sheet = service.spreadsheets()
 
-        result = sheet.values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
+        result = sheet.values().get(spreadsheetId=sheet_id, range=range_name).execute()
 
-        values = result.get('values', [])
+        values = result.get("values", [])
         logging.info(f"Read {len(values)} rows from Google Sheets")
         return values
 
@@ -138,33 +132,37 @@ def read_google_sheet(credentials_path: str, sheet_id: str, range_name: str) -> 
         raise
 
 
-def validate_and_prepare_balances(
-    rows: List[List[str]],
-    db_path: str
-) -> List[Dict]:
+def validate_and_prepare_balances(rows: List[List[str]], db_path: str) -> Tuple[List[Dict], List[str]]:
     """
     Validate sheet data and prepare balance records.
 
     Expected columns: Account | Currency | Amount
+
+    Automatically aggregates duplicate account/currency combinations.
 
     Args:
         rows: Raw rows from Google Sheets
         db_path: Path to database
 
     Returns:
-        List of validated balance dictionaries
+        Tuple of (validated balance list, error list)
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
     # Get valid accounts and currencies
-    accounts = {row['name']: row['id'] for row in
-                conn.execute("SELECT id, name FROM accounts WHERE is_active = 1").fetchall()}
-    currencies = {row['code']: row['id'] for row in
-                  conn.execute("SELECT id, code FROM currencies").fetchall()}
+    accounts = {
+        row["name"]: row["id"]
+        for row in conn.execute("SELECT id, name FROM accounts WHERE is_active = 1").fetchall()
+    }
+    currencies = {
+        row["code"]: row["id"] for row in conn.execute("SELECT id, code FROM currencies").fetchall()
+    }
 
-    balances = []
+    # Use dict to aggregate duplicates: (account_id, currency_id) -> balance_info
+    balance_dict = {}
     errors = []
+    duplicate_count = 0
 
     for idx, row in enumerate(rows, start=2):  # start=2 because row 1 is header
         if len(row) < 3:
@@ -185,18 +183,34 @@ def validate_and_prepare_balances(
 
         # Validate amount
         try:
-            amount = float(amount_str.replace(',', ''))
+            amount = float(amount_str.replace(",", ""))
         except ValueError:
             errors.append(f"Row {idx}: Invalid amount '{amount_str}'")
             continue
 
-        balances.append({
-            'account_id': accounts[account_name],
-            'account_name': account_name,
-            'currency_id': currencies[currency_code],
-            'currency_code': currency_code,
-            'quantity': amount
-        })
+        account_id = accounts[account_name]
+        currency_id = currencies[currency_code]
+        key = (account_id, currency_id)
+
+        # Aggregate duplicates
+        if key in balance_dict:
+            # Duplicate found - sum the amounts
+            old_amount = balance_dict[key]["quantity"]
+            new_amount = old_amount + amount
+            balance_dict[key]["quantity"] = new_amount
+            duplicate_count += 1
+            logging.warning(
+                f"Row {idx}: Duplicate entry for {account_name} / {currency_code} "
+                f"(aggregating: {old_amount:,.2f} + {amount:,.2f} = {new_amount:,.2f})"
+            )
+        else:
+            balance_dict[key] = {
+                "account_id": account_id,
+                "account_name": account_name,
+                "currency_id": currency_id,
+                "currency_code": currency_code,
+                "quantity": amount,
+            }
 
     conn.close()
 
@@ -205,7 +219,11 @@ def validate_and_prepare_balances(
         for error in errors[:10]:  # Show first 10
             logging.warning(f"  • {error}")
 
-    logging.info(f"Validated {len(balances)} balance records")
+    if duplicate_count > 0:
+        logging.warning(f"Aggregated {duplicate_count} duplicate entries")
+
+    balances = list(balance_dict.values())
+    logging.info(f"Validated {len(balances)} unique balance records")
     return balances, errors
 
 
@@ -224,52 +242,48 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
     conn.row_factory = sqlite3.Row
 
     # Get all FX rates
-    fx_rates = {row['currency_id']: row['rate'] for row in
-                conn.execute("SELECT currency_id, rate FROM fx_rates").fetchall()}
+    fx_rates = {
+        row["currency_id"]: row["rate"]
+        for row in conn.execute("SELECT currency_id, rate FROM fx_rates").fetchall()
+    }
 
     # Get IDR rate for conversion
-    idr_currency_id = conn.execute(
-        "SELECT id FROM currencies WHERE code = 'IDR'"
-    ).fetchone()
-    idr_rate = fx_rates.get(idr_currency_id['id']) if idr_currency_id else None
+    idr_currency_id = conn.execute("SELECT id FROM currencies WHERE code = 'IDR'").fetchone()
+    idr_rate = fx_rates.get(idr_currency_id["id"]) if idr_currency_id else None
 
     conn.close()
 
     for balance in balances:
-        currency_id = balance['currency_id']
-        quantity = balance['quantity']
+        currency_id = balance["currency_id"]
+        quantity = balance["quantity"]
 
         # Get rate to USD
         rate_to_usd = fx_rates.get(currency_id)
 
         if rate_to_usd is None:
             logging.warning(
-                f"Missing FX rate for {balance['currency_code']}, "
-                f"skipping value calculation"
+                f"Missing FX rate for {balance['currency_code']}, skipping value calculation"
             )
-            balance['value_usd'] = None
-            balance['value_idr'] = None
+            balance["value_usd"] = None
+            balance["value_idr"] = None
             continue
 
         # Calculate USD value
         value_usd = quantity * rate_to_usd
-        balance['value_usd'] = value_usd
+        balance["value_usd"] = value_usd
 
         # Calculate IDR value
         if idr_rate:
             value_idr = value_usd / idr_rate
-            balance['value_idr'] = value_idr
+            balance["value_idr"] = value_idr
         else:
             logging.warning("Missing IDR FX rate, cannot calculate value_idr")
-            balance['value_idr'] = None
+            balance["value_idr"] = None
 
     return balances
 
 
-def add_zero_balances_for_sold_assets(
-    current_balances: List[Dict],
-    db_path: str
-) -> List[Dict]:
+def add_zero_balances_for_sold_assets(current_balances: List[Dict], db_path: str) -> List[Dict]:
     """
     Add explicit zero-balance records for currencies that were previously held
     but are no longer in the current snapshot.
@@ -286,10 +300,7 @@ def add_zero_balances_for_sold_assets(
     conn = sqlite3.connect(db_path)
 
     # Get current snapshot as a set of (account_id, currency_id) tuples
-    current_holdings = {
-        (bal['account_id'], bal['currency_id'])
-        for bal in current_balances
-    }
+    current_holdings = {(bal["account_id"], bal["currency_id"]) for bal in current_balances}
 
     # Get all historical holdings from latest_balances view
     cursor = conn.execute("""
@@ -310,14 +321,16 @@ def add_zero_balances_for_sold_assets(
         # Add zero balance records
         for account_id, currency_id in sold_holdings:
             currency_code = historical_holdings[(account_id, currency_id)]
-            current_balances.append({
-                'account_id': account_id,
-                'currency_id': currency_id,
-                'currency_code': currency_code,
-                'quantity': 0.0,
-                'value_usd': 0.0,
-                'value_idr': 0.0,
-            })
+            current_balances.append(
+                {
+                    "account_id": account_id,
+                    "currency_id": currency_id,
+                    "currency_code": currency_code,
+                    "quantity": 0.0,
+                    "value_usd": 0.0,
+                    "value_idr": 0.0,
+                }
+            )
             logging.info(f"  Adding zero balance: account_id={account_id}, {currency_code}")
 
     return current_balances
@@ -343,22 +356,25 @@ def insert_balances(balances: List[Dict], db_path: str, timestamp: datetime) -> 
     try:
         for balance in balances:
             # Skip if missing values
-            if balance['value_usd'] is None:
+            if balance["value_usd"] is None:
                 continue
 
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO balances (
                     timestamp, account_id, currency_id,
                     quantity, value_idr, value_usd
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                timestamp.isoformat(),
-                balance['account_id'],
-                balance['currency_id'],
-                balance['quantity'],
-                balance['value_idr'],
-                balance['value_usd']
-            ))
+            """,
+                (
+                    timestamp.isoformat(),
+                    balance["account_id"],
+                    balance["currency_id"],
+                    balance["quantity"],
+                    balance["value_idr"],
+                    balance["value_usd"],
+                ),
+            )
             inserted += 1
 
         conn.commit()
@@ -393,9 +409,9 @@ def main():
     logger.info(f"Database: {db_path}")
 
     # Get configuration from environment
-    credentials_path = os.getenv('GOOGLE_CREDENTIALS_PATH', 'google_credentials.json')
-    sheet_id = os.getenv('GOOGLE_SHEET_ID')
-    sheet_range = os.getenv('GOOGLE_SHEET_RANGE', 'Fiat Balances!A2:C')
+    credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH", "google_credentials.json")
+    sheet_id = os.getenv("GOOGLE_SHEET_ID")
+    sheet_range = os.getenv("GOOGLE_SHEET_RANGE", "Fiat Balances!A2:C")
 
     if not sheet_id:
         logger.error("GOOGLE_SHEET_ID not set in environment")
@@ -428,10 +444,6 @@ def main():
             # Calculate values
             logger.info("Calculating USD and IDR values...")
             balances = calculate_values(balances, str(db_path))
-
-            # Add zero balances for previously held assets that are now gone
-            logger.info("Checking for sold/transferred assets...")
-            balances = add_zero_balances_for_sold_assets(balances, str(db_path))
 
             # Insert snapshot
             snapshot_time = datetime.now()

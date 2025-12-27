@@ -41,6 +41,8 @@ def add_symbol_mappings(db_path: str):
         ("POL", "BINANCE:POLUSDT", 0, 1),
         ("PAXG", "BINANCE:PAXGUSDT", 0, 1),
         # Exchange Tokens
+        ("ASTER", "OKX:ASTERUSDT", 0, 1),
+        ("XAUT", "OKX:XAUTUSDT", 0, 1),
         ("OKB", "OKX:OKBUSDT", 0, 1),
         ("IDR", "FX_IDC:USDIDR", 1, 1),
     ]

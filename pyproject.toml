@@ -16,6 +16,7 @@ dependencies = [
     "google-api-python-client>=2.0.0",
     "python-dotenv>=1.0.0",
     "ccxt>=4.0.0",  # Crypto exchange integration
+    "web3"
 ]
 
 [project.optional-dependencies]
