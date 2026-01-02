@@ -34,12 +34,51 @@ pip install -e .
 
 ### 2. Initialize Database
 
+**Option 1: Quick Setup (Recommended)**
+
+Use the deployment script to initialize everything in one command:
+
+```bash
+# Initialize database and run all bootstrap scripts
+./scripts/deploy.sh
+
+# Or specify custom database path
+./scripts/deploy.sh /path/to/portfolio.db
+```
+
+This automatically:
+- Creates the database with complete schema
+- Runs all database migrations
+- Bootstraps currencies (USD, BTC, ETH, etc.)
+- Bootstraps account types and providers
+- Configures TradingView symbol mappings
+- Sets up blockchain network configurations
+- Verifies the deployment
+
+**Option 2: Manual Setup**
+
 ```bash
 # Create the database with schema
 python scripts/init_db.py data/portfolio.db
+
+# Run migrations
+sqlite3 data/portfolio.db < sql/migrations/001_add_blockchain_support.sql
+sqlite3 data/portfolio.db < sql/migrations/002_add_wallet_addresses.sql
+
+# Bootstrap currencies
+python scripts/bootstrap_currencies.py data/portfolio.db
+
+# Bootstrap accounts
+python scripts/bootstrap_accounts.py data/portfolio.db
+
+# Bootstrap symbol mappings
+python scripts/bootstrap_symbol_mappings.py data/portfolio.db
+
+# Bootstrap blockchain mappings
+python scripts/bootstrap_blockchain_mappings.py data/portfolio.db
 ```
 
-This creates:
+The database includes:
 - 9 tables with proper foreign keys
 - 15+ indexes for performance
 - 6 reporting views
@@ -213,6 +252,49 @@ crontab cron.conf
 ```
 
 See `cron.example` for complete scheduling examples.
+
+### Exporting Analytics to Google Sheets
+
+Export database views to Google Sheets for visualization and dashboards:
+
+```bash
+# Run manually
+python scripts/export_to_sheets.py data/portfolio.db
+
+# Check logs
+tail -f logs/export_$(date +%Y%m).log
+```
+
+**Exported tabs:**
+- `Summary` - Assets, Liabilities, Net Worth totals
+- `By Asset Class` - Breakdown by crypto/stocks/fiat/etc.
+- `By Currency` - Holdings per currency
+- `History` - Daily net worth time series
+
+**Features:**
+- Overwrites existing data (preserves charts)
+- Automatic timestamp footer
+- Lock file prevents concurrent runs
+- Formatted numbers with 2 decimal places
+- Exit codes: 0=success, 1=failure, 2=already running
+
+**Setup:**
+```bash
+# Option 1: Use same sheet as balance imports
+# (no additional config needed, uses GOOGLE_SHEET_ID)
+
+# Option 2: Use separate sheet for exports (recommended)
+echo "EXPORT_SHEET_ID=your-export-sheet-id" >> .env
+
+# Share sheet with service account (Editor permission required)
+# See docs/GOOGLE_SHEETS_SETUP.md
+```
+
+**Scheduling:**
+```bash
+# Export every 6 hours (5 minutes after balance ingestion)
+5 */6 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+```
 
 ## Development
 

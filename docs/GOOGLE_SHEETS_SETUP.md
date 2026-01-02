@@ -187,3 +187,88 @@ This will:
 2. Create snapshot with current timestamp
 3. Calculate USD/IDR values using fx_rates
 4. Insert into balances table
+
+---
+
+## Export Sheet Setup (Optional)
+
+If you want analytics exported to a **separate** Google Sheet for dashboards:
+
+### Step 1: Create Export Sheet
+
+1. Go to [Google Sheets](https://sheets.google.com/)
+2. Click **Blank** to create a new spreadsheet
+3. Rename it: `Portfolio Analytics` (or any name you prefer)
+4. Copy the Sheet ID from the URL:
+   ```
+   https://docs.google.com/spreadsheets/d/EXPORT_SHEET_ID_HERE/edit
+   ```
+
+### Step 2: Share with Service Account
+
+1. Open the `google_credentials.json` file
+2. Copy the `client_email` (same as import sheet)
+3. Open your **export** Google Sheet
+4. Click **Share** button
+5. Paste the service account email
+6. Set permission to **Editor** (not Viewer - export requires write access)
+7. Click **Send**
+
+### Step 3: Configure Environment
+
+Add to your `.env` file:
+
+```bash
+# Add this line (keep existing GOOGLE_SHEET_ID for imports)
+EXPORT_SHEET_ID=your-export-sheet-id-here
+```
+
+Example:
+```bash
+GOOGLE_CREDENTIALS_PATH=google_credentials.json
+GOOGLE_SHEET_ID=1ABCdef...        # Import sheet (balance ingestion)
+EXPORT_SHEET_ID=1XYZ123...        # Export sheet (analytics)
+```
+
+### Step 4: Run First Export
+
+```bash
+python scripts/export_to_sheets.py
+```
+
+This automatically creates 4 tabs:
+- **Summary** - Assets, Liabilities, Net Worth totals
+- **By Asset Class** - Breakdown by crypto/stocks/fiat
+- **By Currency** - Holdings per currency
+- **History** - Daily net worth time series
+
+### Step 5: Create Charts (Optional)
+
+You can now create charts in Google Sheets referencing these tabs:
+
+**Chart Best Practices:**
+- Use **unbounded ranges**: `History!A2:C` (not `A2:C100`)
+- This allows charts to grow as history accumulates
+- Charts are preserved when data is overwritten
+- Example chart types:
+  - **Line chart** for History tab (net worth over time)
+  - **Pie chart** for By Asset Class tab (allocation)
+  - **Bar chart** for By Currency tab (top holdings)
+
+### Troubleshooting
+
+**"Permission denied" error:**
+- Make sure service account has **Editor** permission (not Viewer)
+- Export requires write access to create/update tabs
+
+**"Sheet not found" error:**
+- Verify `EXPORT_SHEET_ID` in `.env` file
+- Check that Sheet ID matches the URL
+
+**Charts disappeared:**
+- This shouldn't happen - script uses `.clear()` which preserves charts
+- If charts are deleted, recreate them and ensure you're using unbounded ranges
+
+**Numbers not formatted:**
+- Script formats with 2 decimals and commas automatically
+- For currency symbols, use Google Sheets: Format → Number → Currency

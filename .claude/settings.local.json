@@ -15,7 +15,8 @@
       "Bash(python scripts/ingest_onchain_balances.py:*)",
       "Bash(python scripts/ingest_balances.py:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ]
   }
 }
