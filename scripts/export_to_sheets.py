@@ -38,7 +38,7 @@ import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
@@ -217,27 +217,33 @@ def query_view_data(db_path: str, view_name: str) -> Tuple[List[str], List[tuple
     return column_names, rows
 
 
-def format_numeric_value(value, decimals: int = 2) -> str:
+def format_value_for_sheets(value, col_type: str):
     """
-    Format numeric value for spreadsheet display.
+    Format value for Google Sheets based on column type.
 
     Args:
-        value: Numeric value (float, int, or None)
-        decimals: Number of decimal places
+        value: Value to format
+        col_type: Column type ('text', 'numeric', 'date')
 
     Returns:
-        Formatted string or empty string for None
+        Properly typed value for Google Sheets
     """
     if value is None:
         return ""
 
-    try:
-        return f"{float(value):,.{decimals}f}"
-    except (ValueError, TypeError):
-        return str(value)
+    if col_type == "numeric":
+        # Return actual number (not string) so Google Sheets treats it as numeric
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return ""
+    elif col_type == "date":
+        return str(value) if value else ""
+    else:  # text
+        return str(value) if value else ""
 
 
-def format_row_for_sheets(row: tuple, column_types: List[str]) -> List[str]:
+def format_row_for_sheets(row: tuple, column_types: List[str]) -> List:
     """
     Format a database row for Google Sheets.
 
@@ -247,17 +253,12 @@ def format_row_for_sheets(row: tuple, column_types: List[str]) -> List[str]:
                      ('text', 'numeric', 'date')
 
     Returns:
-        List of formatted string values
+        List of properly typed values for Google Sheets
     """
     formatted = []
 
     for value, col_type in zip(row, column_types):
-        if col_type == "numeric":
-            formatted.append(format_numeric_value(value))
-        elif col_type == "date":
-            formatted.append(str(value) if value else "")
-        else:  # text
-            formatted.append(str(value) if value else "")
+        formatted.append(format_value_for_sheets(value, col_type))
 
     return formatted
 
@@ -366,7 +367,7 @@ def write_sheet_data(
     spreadsheet_id: str,
     tab_name: str,
     headers: List[str],
-    rows: List[List[str]],
+    rows: List[List],
     timestamp: datetime,
 ):
     """
@@ -383,7 +384,7 @@ def write_sheet_data(
         spreadsheet_id: Target spreadsheet ID
         tab_name: Name of tab
         headers: Column headers
-        rows: Data rows (already formatted)
+        rows: Data rows (properly typed values)
         timestamp: Export timestamp
     """
     try:
@@ -401,7 +402,7 @@ def write_sheet_data(
             .update(
                 spreadsheetId=spreadsheet_id,
                 range=range_name,
-                valueInputOption="RAW",  # Don't parse formulas
+                valueInputOption="USER_ENTERED",  # Let Google Sheets interpret types
                 body=body,
             )
             .execute()
@@ -417,43 +418,67 @@ def write_sheet_data(
         raise
 
 
-def format_header_row(service, spreadsheet_id: str, sheet_id: int):
+def format_sheet(service, spreadsheet_id: str, sheet_id: int, num_cols: int, column_types: List[str]):
     """
-    Apply bold formatting to header row (row 1).
-
-    Optional enhancement for better readability.
+    Apply formatting to the sheet (bold headers + number formatting).
 
     Args:
         service: Google Sheets API service
         spreadsheet_id: Target spreadsheet ID
         sheet_id: Numeric sheet ID (not tab name)
+        num_cols: Number of columns
+        column_types: List of column types
     """
     try:
-        request_body = {
-            "requests": [
-                {
+        requests = []
+
+        # 1. Bold header row
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                },
+                "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                "fields": "userEnteredFormat.textFormat.bold",
+            }
+        })
+
+        # 2. Format numeric columns with thousand separators and 2 decimals
+        for col_idx, col_type in enumerate(column_types):
+            if col_type == "numeric":
+                requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet_id,
-                            "startRowIndex": 0,
-                            "endRowIndex": 1,
+                            "startColumnIndex": col_idx,
+                            "endColumnIndex": col_idx + 1,
+                            "startRowIndex": 1,  # Skip header
                         },
-                        "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
-                        "fields": "userEnteredFormat.textFormat.bold",
+                        "cell": {
+                            "userEnteredFormat": {
+                                "numberFormat": {
+                                    "type": "NUMBER",
+                                    "pattern": "#,##0.00"
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat.numberFormat",
                     }
-                }
-            ]
-        }
+                })
 
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id, body=request_body
-        ).execute()
+        if requests:
+            request_body = {"requests": requests}
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id, body=request_body
+            ).execute()
 
-        logging.debug(f"✓ Applied header formatting to sheet ID {sheet_id}")
+            logging.debug(f"✓ Applied formatting to sheet ID {sheet_id}")
 
     except HttpError as e:
         # Non-critical - don't fail export if formatting fails
-        logging.warning(f"Could not format headers for sheet {sheet_id}: {e}")
+        logging.warning(f"Could not apply formatting to sheet {sheet_id}: {e}")
 
 
 def export_view_to_sheet(
@@ -513,8 +538,8 @@ def export_view_to_sheet(
             service, spreadsheet_id, tab_name, headers, formatted_rows, timestamp
         )
 
-        # 6. Format header (optional)
-        format_header_row(service, spreadsheet_id, sheet_id)
+        # 6. Apply formatting (bold headers + number formatting)
+        format_sheet(service, spreadsheet_id, sheet_id, len(headers), column_types)
 
         logging.info(f"✓ Successfully exported {view_name}")
         return True
