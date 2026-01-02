@@ -7,7 +7,7 @@ This document explains how to ingest balances from various sources into the port
 The portfolio system tracks balances from three sources:
 1. **Exchanges** (Binance, OKX, Bitget via CCXT)
 2. **On-Chain Wallets** (EVM chains: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base)
-3. **Fiat Accounts** (Google Sheets)
+3. **Sheet Balances** (Google Sheets - fiat and crypto)
 
 ## Recommended Workflow
 
@@ -24,7 +24,7 @@ python scripts/ingest_balances.py --sources all
 # Or ingest from specific source only
 python scripts/ingest_balances.py --sources exchanges
 python scripts/ingest_balances.py --sources wallets
-python scripts/ingest_balances.py --sources fiat
+python scripts/ingest_balances.py --sources sheet
 ```
 
 **Key Features:**
@@ -45,8 +45,8 @@ python scripts/ingest_crypto_balances.py
 # On-chain wallet balances only (no zero-balance logic)
 python scripts/ingest_onchain_balances.py
 
-# Fiat balances only (no zero-balance logic)
-python scripts/ingest_fiat_balances.py
+# Sheet balances only (no zero-balance logic)
+python scripts/ingest_balances.py --sources sheet
 ```
 
 **Use these when:**
@@ -112,8 +112,8 @@ python scripts/ingest_balances.py --sources all
 # On-chain balances every 6 hours
 0 */6 * * * cd /path/to/personal-finance && python scripts/ingest_onchain_balances.py >> logs/onchain.log 2>&1
 
-# Fiat balances daily at 8 AM
-0 8 * * * cd /path/to/personal-finance && python scripts/ingest_fiat_balances.py >> logs/fiat.log 2>&1
+# Sheet balances daily at 8 AM
+0 8 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources sheet >> logs/sheet.log 2>&1
 
 # Weekly complete snapshot with zero-balance (Sunday at midnight)
 0 0 * * 0 cd /path/to/personal-finance && python scripts/ingest_balances.py --sources all >> logs/weekly_snapshot.log 2>&1
@@ -193,8 +193,8 @@ Each source has different characteristics:
    - Slower (1-2 seconds per network)
    - Rate limits: Depends on provider
 
-3. **Fiat** (`Google Sheets`):
-   - Manual entry
+3. **Sheet Balances** (`Google Sheets`):
+   - Manual entry (fiat and crypto)
    - No API keys for balances (just Google Sheets API)
    - Fast (< 1 second)
    - No rate limits

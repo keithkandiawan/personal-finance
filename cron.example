@@ -28,8 +28,8 @@ PROJECT_DIR=/path/to/personal-finance
 # Crypto balances - every 4 hours
 # 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_crypto_balances.py data/portfolio.db
 
-# Fiat balances - daily at 8:00 AM
-# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_fiat_balances.py data/portfolio.db
+# Sheet balances - daily at 8:00 AM
+# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet data/portfolio.db
 
 # ============================================================================
 # REPORTS & EXPORTS (Future)

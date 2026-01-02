@@ -1,6 +1,6 @@
 # Google Sheets API Setup Guide
 
-This guide walks you through setting up Google Sheets API access for the fiat balance import script.
+This guide walks you through setting up Google Sheets API access for the sheet balance import script.
 
 ## Overview
 
@@ -25,7 +25,7 @@ We'll use a **Service Account** to access Google Sheets. This allows the script 
 2. Click **Create Credentials** → **Service Account**
 3. Fill in:
    - **Name**: `portfolio-tracker`
-   - **Description**: `Service account for reading fiat balances`
+   - **Description**: `Service account for reading sheet balances`
 4. Click **Create and Continue**
 5. Skip the optional steps (click **Done**)
 
@@ -60,7 +60,7 @@ We'll use a **Service Account** to access Google Sheets. This allows the script 
    portfolio-tracker@personal-finance-tracker-xxxxx.iam.gserviceaccount.com
    ```
 3. Copy this email address
-4. Open your Google Sheet (fiat balances)
+4. Open your Google Sheet (sheet balances)
 5. Click **Share** button
 6. Paste the service account email
 7. Set permission to **Viewer** (read-only is enough)
@@ -77,8 +77,8 @@ https://docs.google.com/spreadsheets/d/1ABC...XYZ/edit
 
 **Sheet ID**: The long string in the URL (e.g., `1ABC...XYZ`)
 
-**Range**: The tab name and cell range (e.g., `Fiat Balances!A2:C`)
-- `Fiat Balances` = tab name
+**Range**: The tab name and cell range (e.g., `Sheet Balances!A2:C`)
+- `Sheet Balances` = tab name
 - `A2:C` = from row 2 (skip header) to end, columns A-C
 
 ## Step 8: Configure Environment
@@ -89,14 +89,14 @@ Create a `.env` file in your project root:
 # Google Sheets Configuration
 GOOGLE_CREDENTIALS_PATH=google_credentials.json
 GOOGLE_SHEET_ID=your-sheet-id-here
-GOOGLE_SHEET_RANGE=Fiat Balances!A2:C
+GOOGLE_SHEET_RANGE=Sheet Balances!A2:C
 ```
 
 Example:
 ```bash
 GOOGLE_CREDENTIALS_PATH=google_credentials.json
 GOOGLE_SHEET_ID=1ABCdefGHI_jklMNOpqrSTUvwxYZ0123456789
-GOOGLE_SHEET_RANGE=Fiat Balances!A2:C
+GOOGLE_SHEET_RANGE=Sheet Balances!A2:C
 ```
 
 ## Step 9: Install Python Dependencies
@@ -179,7 +179,7 @@ Your Google Sheet should have this structure:
 Once setup is complete, you can run:
 
 ```bash
-python scripts/ingest_fiat_balances.py data/portfolio.db
+python scripts/ingest_balances.py --sources sheet
 ```
 
 This will:

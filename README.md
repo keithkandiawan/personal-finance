@@ -17,7 +17,7 @@ A low-maintenance, reliable personal portfolio tracking system designed for long
 - Automatic price updates via scheduled jobs
 - Historical net worth tracking
 - Asset allocation reporting by provider, currency, and asset class
-- Spreadsheet-based manual data entry for fiat balances
+- Spreadsheet-based manual data entry via Google Sheets
 
 ## Quick Start
 

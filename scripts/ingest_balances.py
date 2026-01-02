@@ -2,7 +2,7 @@
 """
 Unified Balance Ingestion Script
 
-Fetches balances from all sources (exchanges, wallets, fiat) and creates a single
+Fetches balances from all sources (exchanges, wallets, sheet) and creates a single
 unified snapshot. Can also run individual sources separately.
 
 Usage:
@@ -12,12 +12,12 @@ Usage:
     # Run individual sources (skips zero-balance logic)
     python scripts/ingest_balances.py --sources exchanges
     python scripts/ingest_balances.py --sources wallets
-    python scripts/ingest_balances.py --sources fiat
+    python scripts/ingest_balances.py --sources sheet
 
 Requirements:
     - Exchange API keys in .env
     - RPC endpoints configured for wallets
-    - Google Sheets access for fiat balances
+    - Google Sheets access for sheet balances
 
 Example cron (every 6 hours, all sources):
     0 */6 * * * cd /path && python scripts/ingest_balances.py >> logs/balances.log 2>&1
@@ -352,19 +352,19 @@ def fetch_wallet_balances(db_path: str) -> List[Dict]:
 
 
 # ============================================================================
-# FIAT BALANCES (Google Sheets)
+# SHEET BALANCES (Google Sheets)
 # ============================================================================
 
 
-def fetch_fiat_balances(db_path: str) -> List[Dict]:
-    """Fetch fiat balances from Google Sheets."""
+def fetch_sheet_balances(db_path: str) -> List[Dict]:
+    """Fetch balances from Google Sheets (fiat and crypto)."""
     try:
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google.oauth2.service_account import Credentials as ServiceAccountCredentials
         from googleapiclient.discovery import build
     except ImportError:
-        logging.warning("Google API libraries not installed, skipping fiat balances")
+        logging.warning("Google API libraries not installed, skipping sheet balances")
         return []
 
     creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
@@ -372,7 +372,7 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
     sheet_range = os.getenv("GOOGLE_SHEET_RANGE")
 
     if not all([creds_path, sheet_id, sheet_range]):
-        logging.warning("Google Sheets not configured, skipping fiat balances")
+        logging.warning("Google Sheets not configured, skipping sheet balances")
         return []
 
     try:
@@ -454,7 +454,7 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
                 balance_dict[key]["quantity"] = new_quantity
                 duplicate_count += 1
                 logging.debug(
-                    f"Row {idx}: Duplicate fiat entry for {account_name} / {currency_code} "
+                    f"Row {idx}: Duplicate sheet entry for {account_name} / {currency_code} "
                     f"(aggregating: {old_quantity:,.2f} + {quantity:,.2f} = {new_quantity:,.2f})"
                 )
             else:
@@ -463,13 +463,13 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
                     "account_name": account_name,
                     "currency_id": currency_id,
                     "quantity": quantity,
-                    "source": "fiat",
+                    "source": "sheet",
                 }
 
         # Print clean summary of issues
         if missing_accounts or missing_currencies or invalid_amounts or skipped_rows:
             logging.warning("=" * 70)
-            logging.warning("FIAT BALANCE ISSUES - ACTION REQUIRED")
+            logging.warning("SHEET BALANCE ISSUES - ACTION REQUIRED")
             logging.warning("=" * 70)
 
             if missing_accounts:
@@ -504,11 +504,11 @@ def fetch_fiat_balances(db_path: str) -> List[Dict]:
             logging.info(f"✓ Aggregated {duplicate_count} duplicate entries")
 
         all_balances = list(balance_dict.values())
-        logging.info(f"✓ Parsed {len(all_balances)} fiat balances")
+        logging.info(f"✓ Parsed {len(all_balances)} sheet balances")
         return all_balances
 
     except Exception as e:
-        logging.error(f"✗ Failed to fetch fiat balances: {e}")
+        logging.error(f"✗ Failed to fetch sheet balances: {e}")
         return []
 
 
@@ -754,7 +754,7 @@ def main():
     parser = argparse.ArgumentParser(description="Ingest balances from various sources")
     parser.add_argument(
         "--sources",
-        choices=["all", "exchanges", "wallets", "fiat"],
+        choices=["all", "exchanges", "wallets", "sheet"],
         default="all",
         help="Which sources to fetch (default: all)",
     )
@@ -792,10 +792,10 @@ def main():
                 wallet_balances = fetch_wallet_balances(str(db_path))
                 all_balances.extend(wallet_balances)
 
-            if args.sources in ["all", "fiat"]:
-                logger.info("--- Fetching Fiat Balances ---")
-                fiat_balances = fetch_fiat_balances(str(db_path))
-                all_balances.extend(fiat_balances)
+            if args.sources in ["all", "sheet"]:
+                logger.info("--- Fetching Sheet Balances ---")
+                sheet_balances = fetch_sheet_balances(str(db_path))
+                all_balances.extend(sheet_balances)
 
             if not all_balances:
                 logger.warning("No balances fetched from any source")

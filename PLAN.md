@@ -8,7 +8,7 @@ Build a low-maintenance, reliable, personal portfolio tracking system with:
 	•	Spreadsheet (Google Sheets / Excel) as the only human-facing UI
 	•	always-on execution via a small EC2 nano VM
 
-The system must support crypto assets, fiat balances (IDR), and FX rates, while remaining simple enough for non-technical users to interact with safely.
+The system must support crypto assets, manual balance tracking via Google Sheets, and FX rates, while remaining simple enough for non-technical users to interact with safely.
 
 This document defines the scope, architecture, constraints, and concrete tasks for an AI agent working on this project.
 
@@ -65,7 +65,7 @@ Must run comfortably on ~300 MB available RAM.
 Data Type	Source of Truth	Human Editable
 Crypto balances	SQLite	No
 Crypto prices	SQLite	No
-Fiat balances (IDR)	Spreadsheet → SQLite	Yes (via Google sheet)
+Sheet balances (fiat & crypto)	Spreadsheet → SQLite	Yes (via Google sheet)
 FX rates	SQLite	No
 Reports	Spreadsheet	Yes (formulas only)
 
@@ -172,7 +172,7 @@ CREATE INDEX idx_balances_currency ON balances(currency_id);
 	•	Store source
 	•	Append only
 
-7.3 Fiat Import Script
+7.3 Sheet Import Script
 	•	Read spreadsheet (Via google Sheets API)
 	•	Validate:
 	•	Non-negative balances
@@ -211,7 +211,7 @@ Missed runs are acceptable.
 
 The project is considered successful when:
 	•	Crypto balances update automatically
-	•	Fiat balances are easy to maintain via spreadsheet
+	•	Sheet balances are easy to maintain via spreadsheet
 	•	Net worth can be recomputed for any historical date
 	•	VM memory usage remains stable
 	•	Non-technical users never touch the database or scripts
@@ -220,7 +220,7 @@ The project is considered successful when:
 
 12. Deliverables for the AI Agent
 	1.	SQLite schema creation script
-	2.	Python ingestion scripts (crypto, FX, fiat)
+	2.	Python ingestion scripts (crypto, FX, sheet)
 	3.	Validation logic
 	4.	CSV export scripts
 	5.	Minimal README for human operation
