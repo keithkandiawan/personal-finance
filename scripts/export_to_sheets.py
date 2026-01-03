@@ -24,7 +24,7 @@ Exported Tabs:
     - Summary: Assets, Liabilities, Net Worth
     - By Asset Class: Breakdown by crypto/stocks/fiat
     - By Currency: Holdings per currency
-    - History: Daily net worth time series
+    - History: Daily net worth snapshots (Assets, Liabilities, Net Worth)
 
 Example Cron (every 6 hours, 5min after ingestion):
     5 */6 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
@@ -51,7 +51,7 @@ VIEW_COLUMN_TYPES = {
     "net_worth_summary": ["text", "numeric", "numeric"],
     "net_worth_by_asset_class": ["text", "numeric", "numeric", "numeric"],
     "net_worth_by_currency": ["text", "text", "numeric", "numeric", "numeric"],
-    "net_worth_history": ["date", "numeric", "numeric"],
+    "net_worth_history": ["date", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"],
 }
 
 
@@ -193,17 +193,34 @@ def validate_data_exists(db_path: str) -> bool:
 
 def query_view_data(db_path: str, view_name: str) -> Tuple[List[str], List[tuple]]:
     """
-    Query a database view and return headers and data.
+    Query a database view or table and return headers and data.
 
     Args:
         db_path: Path to SQLite database
-        view_name: Name of view to query
+        view_name: Name of view or table to query
 
     Returns:
         Tuple of (column_names, rows)
     """
     conn = sqlite3.connect(db_path)
-    cursor = conn.execute(f"SELECT * FROM {view_name}")
+
+    # Special handling for net_worth_history table
+    if view_name == "net_worth_history":
+        # Query only the columns we need for export, ordered by date
+        cursor = conn.execute("""
+            SELECT
+                snapshot_date,
+                assets_idr,
+                assets_usd,
+                liabilities_idr,
+                liabilities_usd,
+                net_worth_idr,
+                net_worth_usd
+            FROM net_worth_history
+            ORDER BY snapshot_date ASC
+        """)
+    else:
+        cursor = conn.execute(f"SELECT * FROM {view_name}")
 
     # Extract column names from cursor description
     column_names = [description[0] for description in cursor.description]
@@ -584,7 +601,7 @@ def export_all_views(
         {
             "view_name": "net_worth_history",
             "tab_name": "History",
-            "column_types": ["date", "numeric", "numeric"],
+            "column_types": ["date", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"],
         },
     ]
 

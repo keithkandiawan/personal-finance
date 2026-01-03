@@ -292,9 +292,33 @@ echo "EXPORT_SHEET_ID=your-export-sheet-id" >> .env
 
 **Scheduling:**
 ```bash
-# Export every 6 hours (5 minutes after balance ingestion)
-5 */6 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+# Create daily snapshots at 11:59 PM
+59 23 * * * cd /path && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
+
+# Export to sheets daily at midnight (after snapshot)
+0 0 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 ```
+
+### Creating Net Worth Snapshots
+
+The system uses a dedicated table to store daily net worth snapshots:
+
+```bash
+# Create today's snapshot
+python scripts/snapshot_net_worth.py
+```
+
+**Features:**
+- **Idempotent** - Safe to run multiple times per day (uses UPSERT)
+- **Lock file** - Prevents concurrent runs
+- **Today only** - Always snapshots today's date (historical snapshots via separate backfill script)
+- **Calculates** - Assets, Liabilities, and Net Worth in both IDR and USD
+
+**How it works:**
+- Queries the `net_worth_summary` view for today's balances
+- Calculates total assets and liabilities
+- Stores in `net_worth_history` table
+- Used by the History tab in Google Sheets export
 
 ## Development
 

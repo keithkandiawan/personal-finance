@@ -32,14 +32,21 @@ PROJECT_DIR=/path/to/personal-finance
 # 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet data/portfolio.db
 
 # ============================================================================
+# NET WORTH SNAPSHOT
+# ============================================================================
+
+# Create daily net worth snapshot - daily at 11:59 PM
+# 59 23 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
+
+# ============================================================================
 # GOOGLE SHEETS EXPORT
 # ============================================================================
 
 # Export analytics to Google Sheets - every 6 hours (5 min after balance ingestion)
 # 5 */6 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 
-# Or export daily (after all balance ingestion)
-# 15 8 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+# Or export daily (after snapshot)
+# 0 0 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 
 # ============================================================================
 # REPORTS & EXPORTS (Future)

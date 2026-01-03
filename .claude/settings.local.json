@@ -14,6 +14,8 @@
       "Bash(pip install:*)",
       "Bash(python scripts/ingest_onchain_balances.py:*)",
       "Bash(python scripts/ingest_balances.py:*)",
+      "Bash(python scripts/snapshot_net_worth.py:*)",
+      "Bash(python scripts/export_to_sheets.py:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(ls:*)"
