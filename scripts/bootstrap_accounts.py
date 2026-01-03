@@ -88,6 +88,7 @@ def bootstrap_accounts(db_path: str):
     add_account(conn, "Bitget Evelyn", "exchange", "Bitget", "Crypto exchange - Evelyn")
     add_account(conn, "Mobee Evelyn", "exchange", "Mobee", "Crypto exchange - Evelyn")
     add_account(conn, "Mobee Sus", "exchange", "Mobee", "Crypto exchange - Sus")
+    add_account(conn, "Mobee Keith", "exchange", "Mobee", "Mobee")
 
     # ========================================================================
     # CRYPTO WALLETS (Assets)
@@ -95,7 +96,7 @@ def bootstrap_accounts(db_path: str):
     print("\nCrypto Wallets:")
     add_account(conn, "Cold Wallet Flex", "wallet", "Ledger", "Hardware wallet - Ledger Flex")
     add_account(conn, "Lighter Keith", "wallet", "Lighter", "Software wallet - Lighter")
-    add_account(conn, "Mobee Keith", "wallet", "Mobee", "Mobee")
+   
 
     # ========================================================================
     # CASH (Assets)
