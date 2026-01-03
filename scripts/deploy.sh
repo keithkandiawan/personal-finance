@@ -26,7 +26,6 @@ NC='\033[0m' # No Color
 # Configuration
 DB_PATH="${1:-data/portfolio.db}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_DIR="${PROJECT_ROOT}/logs"
 DATA_DIR="${PROJECT_ROOT}/data"
 
 # Utility functions
@@ -69,7 +68,6 @@ check_existing_database() {
 create_directories() {
     log_info "Creating directories..."
     mkdir -p "$DATA_DIR"
-    mkdir -p "$LOG_DIR"
     log_success "Directories created"
 }
 
