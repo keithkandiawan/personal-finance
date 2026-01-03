@@ -84,18 +84,6 @@ The database includes:
 - 6 reporting views
 - Seed data for currency/account types
 
-### 3. Run Example
-
-```bash
-# Add sample currencies and fetch prices
-python scripts/example_setup.py data/portfolio.db
-```
-
-This demonstrates:
-- Adding currencies (stocks, crypto, ETFs)
-- Mapping to TradingView symbols
-- Fetching current prices
-
 ## Project Structure
 
 ```
@@ -111,7 +99,8 @@ personal-finance/
 │
 ├── scripts/                # Executable scripts
 │   ├── init_db.py         # Database initialization
-│   └── example_setup.py   # Example usage
+│   ├── bootstrap_*.py     # Bootstrap data and configuration
+│   └── ingest_*.py        # Data ingestion scripts
 │
 ├── sql/                    # SQL schemas
 │   └── schema.sql         # Complete database schema

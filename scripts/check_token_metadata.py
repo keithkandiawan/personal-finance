@@ -63,8 +63,8 @@ def main():
             print(f"Decimals: {metadata.decimals}")
             print(f"Contract: {metadata.contract_address}")
             print("\nTo add this token to your database:")
-            print(f"1. Add the currency: python scripts/add_symbol_mappings.py")
-            print(f"2. Or manually add to blockchain_contracts table")
+            print(f"1. Use discover_tokens.py to add it automatically")
+            print(f"2. Or manually add to currencies + blockchain_contracts tables")
         else:
             print("Error: Could not fetch token metadata")
             print("This might not be a valid ERC-20 contract")

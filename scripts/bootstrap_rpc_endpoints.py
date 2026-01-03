@@ -76,7 +76,7 @@ def bootstrap_rpc_endpoints(db_path: str):
     print("Next steps:")
     print("1. Add wallet addresses: python scripts/add_wallet_addresses.py")
     print("2. Discover tokens: python scripts/discover_tokens.py")
-    print("3. Fetch balances: python scripts/ingest_onchain_balances.py")
+    print("3. Fetch balances: python scripts/ingest_balances.py --sources wallets")
 
 
 def main():

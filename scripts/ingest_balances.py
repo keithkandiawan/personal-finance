@@ -38,7 +38,7 @@ from dotenv import load_dotenv
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from portfolio.blockchain import MultiChainAdapter, TokenBalance
+from portfolio.blockchain import MultiChainAdapter
 from portfolio.exchanges import create_exchange
 
 # Load environment
@@ -609,7 +609,7 @@ def calculate_values(balances: List[Dict], db_path: str) -> List[Dict]:
         for currency in sorted(missing_fx_rates):
             logging.warning(f"  • {currency}")
         logging.warning("  → Add rates via: python scripts/ingest_fx_rates.py")
-        logging.warning("  → Or add symbol mappings first: python scripts/add_symbol_mappings.py")
+        logging.warning("  → Or add symbol mappings first: python scripts/bootstrap_symbol_mappings.py")
         logging.warning("=" * 70)
 
     return balances

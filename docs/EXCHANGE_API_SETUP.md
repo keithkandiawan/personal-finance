@@ -150,7 +150,7 @@ BITGET_API_PASSWORD=your-bitget-passphrase
 pip install -e .
 
 # Test the script (dry run)
-python scripts/ingest_crypto_balances.py data/portfolio.db
+python scripts/ingest_balances.py --sources exchanges
 ```
 
 ### Expected Output
@@ -250,7 +250,7 @@ Once API keys are configured:
 
 1. **Test manually:**
    ```bash
-   python scripts/ingest_crypto_balances.py data/portfolio.db
+   python scripts/ingest_balances.py --sources exchanges
    ```
 
 2. **Check balances:**
@@ -261,5 +261,5 @@ Once API keys are configured:
 3. **Schedule automation:**
    ```bash
    # Add to crontab (every 4 hours)
-   0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_crypto_balances.py data/portfolio.db
+   0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources exchanges >> logs/exchanges.log 2>&1
    ```

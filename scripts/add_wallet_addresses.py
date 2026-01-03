@@ -46,10 +46,8 @@ def list_accounts(conn: sqlite3.Connection):
         print("Add accounts in scripts/bootstrap_accounts.py")
         return []
 
-    for acc_id, name, provider, notes in accounts:
+    for acc_id, name, account_type, provider in accounts:
         print(f"[{acc_id}] {name:20} ({provider})")
-        if notes:
-            print(f"    {notes}")
 
     return accounts
 
@@ -229,7 +227,7 @@ def interactive_add(db_path: str):
     print("\n✓ Done!")
     print("\nNext steps:")
     print("1. Discover tokens: python scripts/discover_tokens.py")
-    print("2. Fetch balances: python scripts/ingest_onchain_balances.py")
+    print("2. Fetch balances: python scripts/ingest_balances.py --sources wallets")
 
 
 def main():

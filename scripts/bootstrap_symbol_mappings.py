@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Add TradingView Symbol Mappings
+Bootstrap TradingView Symbol Mappings
 
 Maps currencies to TradingView symbols for price fetching.
 Run this after bootstrapping currencies.
 
 Usage:
-    python scripts/add_symbol_mappings.py [database_path]
+    python scripts/bootstrap_symbol_mappings.py [database_path]
 """
 
 import sqlite3
@@ -144,7 +144,7 @@ def main():
     add_symbol_mappings(db_path)
     print("\nNext steps:")
     print("1. Fetch FX rates: python scripts/ingest_fx_rates.py")
-    print("2. Test crypto ingestion: python scripts/ingest_crypto_balances.py")
+    print("2. Test balance ingestion: python scripts/ingest_balances.py --sources exchanges")
 
 
 if __name__ == "__main__":

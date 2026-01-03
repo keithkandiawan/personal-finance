@@ -217,9 +217,10 @@ def main():
     print("\nNext steps:")
     print("1. Update FX rates to use parent currency prices:")
     print("   python scripts/ingest_fx_rates.py")
-    print("2. Test crypto ingestion:")
-    print("   python scripts/ingest_crypto_balances.py")
-    print("3. Later: Build blockchain ingestion script using contract addresses")
+    print("2. Test balance ingestion from exchanges:")
+    print("   python scripts/ingest_balances.py --sources exchanges")
+    print("3. Test balance ingestion from wallets:")
+    print("   python scripts/ingest_balances.py --sources wallets")
 
 
 if __name__ == "__main__":

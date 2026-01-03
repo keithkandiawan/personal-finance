@@ -28,7 +28,6 @@ import logging
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -299,12 +298,12 @@ def discover_wallet_tokens(db_path: str):
 
     if total_discovered > 0:
         logger.info("\nNext steps:")
-        logger.info("1. Add symbol mappings: python scripts/add_symbol_mappings.py")
+        logger.info("1. Add symbol mappings: python scripts/bootstrap_symbol_mappings.py")
         logger.info("2. Fetch FX rates: python scripts/ingest_fx_rates.py")
-        logger.info("3. Ingest balances: python scripts/ingest_onchain_balances.py")
+        logger.info("3. Ingest balances: python scripts/ingest_balances.py --sources wallets")
     else:
         logger.info("\nAll tokens already in database. You can now:")
-        logger.info("1. Fetch balances: python scripts/ingest_onchain_balances.py")
+        logger.info("1. Fetch balances: python scripts/ingest_balances.py --sources wallets")
 
     conn.close()
 

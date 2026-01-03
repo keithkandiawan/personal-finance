@@ -32,32 +32,30 @@ python scripts/ingest_balances.py --sources sheet
 - Zero-balance logic ONLY when running all sources (prevents stale balances)
 - No zero-balance logic when running individual sources (prevents incorrect zeros)
 
-### Individual Scripts (⚠️ Deprecated - Legacy Only)
+### Individual Source Ingestion
 
-**These scripts are deprecated.** They're kept for backward compatibility but will show a deprecation warning.
-
-Use the unified script instead for all new workflows:
+If you need to ingest from a specific source only (useful for testing or specific updates):
 
 ```bash
 # Exchange balances only (no zero-balance logic)
-python scripts/ingest_crypto_balances.py
+python scripts/ingest_balances.py --sources exchanges
 
 # On-chain wallet balances only (no zero-balance logic)
-python scripts/ingest_onchain_balances.py
+python scripts/ingest_balances.py --sources wallets
 
 # Sheet balances only (no zero-balance logic)
 python scripts/ingest_balances.py --sources sheet
 ```
 
-**Use these when:**
+**Use individual sources when:**
 - You only want to update one specific source
 - You're testing a new exchange or wallet
 - You're debugging a specific integration
 
-**DO NOT use these when:**
+**DO NOT use individual sources when:**
 - You want accurate zero-balance tracking
 - You've sold/transferred assets and want to record zeros
-- You want a complete snapshot
+- You want a complete snapshot (use `--sources all` instead)
 
 ## Zero-Balance Logic Explained
 
@@ -77,12 +75,12 @@ Running individual scripts creates an **incomplete picture**:
 
 **Bad example:**
 ```bash
-# Run exchange script (sees no USDC on exchanges)
-python scripts/ingest_crypto_balances.py
+# Run exchange ingestion (sees no USDC on exchanges)
+python scripts/ingest_balances.py --sources exchanges
 # → Would add zero for USDC if it had zero-balance logic
 
-# Run wallet script later (sees USDC in wallet)
-python scripts/ingest_onchain_balances.py
+# Run wallet ingestion later (sees USDC in wallet)
+python scripts/ingest_balances.py --sources wallets
 # → But zero was already recorded!
 ```
 
@@ -103,14 +101,14 @@ python scripts/ingest_balances.py --sources all
 0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources all >> logs/balances.log 2>&1
 ```
 
-### Option 2: Separate Schedules
+### Option 2: Separate Schedules by Source
 
 ```cron
 # Exchange balances every 4 hours
-0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_crypto_balances.py >> logs/crypto.log 2>&1
+0 */4 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources exchanges >> logs/exchanges.log 2>&1
 
 # On-chain balances every 6 hours
-0 */6 * * * cd /path/to/personal-finance && python scripts/ingest_onchain_balances.py >> logs/onchain.log 2>&1
+0 */6 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources wallets >> logs/wallets.log 2>&1
 
 # Sheet balances daily at 8 AM
 0 8 * * * cd /path/to/personal-finance && python scripts/ingest_balances.py --sources sheet >> logs/sheet.log 2>&1

@@ -141,11 +141,11 @@ def main():
     bootstrap_currencies(db_path)
     print("\nNext steps:")
     print("1. Add TradingView symbol mappings for price tracking:")
-    print("   python scripts/add_symbol_mappings.py")
+    print("   python scripts/bootstrap_symbol_mappings.py")
     print("2. Fetch FX rates:")
     print("   python scripts/ingest_fx_rates.py")
-    print("3. Try crypto ingestion again:")
-    print("   python scripts/ingest_crypto_balances.py")
+    print("3. Try ingesting balances from exchanges:")
+    print("   python scripts/ingest_balances.py --sources exchanges")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,8 @@
       "Bash(python scripts/export_to_sheets.py:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(wc:*)"
     ]
   }
 }

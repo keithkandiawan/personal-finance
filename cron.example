@@ -22,51 +22,49 @@ PROJECT_DIR=/path/to/personal-finance
 # 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db
 
 # ============================================================================
-# BALANCE SNAPSHOTS (Future)
+# BALANCE INGESTION
 # ============================================================================
 
-# Crypto balances - every 4 hours
-# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_crypto_balances.py data/portfolio.db
+# Exchange balances - every 4 hours
+# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources exchanges >> logs/balances.log 2>&1
+
+# Wallet balances - every 4 hours
+# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources wallets >> logs/balances.log 2>&1
 
 # Sheet balances - daily at 8:00 AM
-# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet data/portfolio.db
+# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet >> logs/balances.log 2>&1
+
+# All sources - every 6 hours
+# 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources all >> logs/balances.log 2>&1
 
 # ============================================================================
 # NET WORTH SNAPSHOT
 # ============================================================================
 
 # Create daily net worth snapshot - daily at 11:59 PM
-# 59 23 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
+59 23 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
 
 # ============================================================================
 # GOOGLE SHEETS EXPORT
 # ============================================================================
 
-# Export analytics to Google Sheets - every 6 hours (5 min after balance ingestion)
+# Export analytics to Google Sheets daily (after snapshot)
+0 0 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+
+# Alternative: Export every 6 hours (after balance ingestion)
 # 5 */6 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 
-# Or export daily (after snapshot)
-# 0 0 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
-
 # ============================================================================
-# REPORTS & EXPORTS (Future)
+# FUTURE ENHANCEMENTS (Scripts not yet implemented)
 # ============================================================================
 
-# Export CSV reports - daily at 10:00 PM
+# CSV report exports (export_reports.py - not implemented)
 # 0 22 * * * cd $PROJECT_DIR && python scripts/export_reports.py data/portfolio.db
 
-# ============================================================================
-# BACKUP (Future)
-# ============================================================================
-
-# Backup database - daily at 3:00 AM
+# Database backups (backup_database.sh - not implemented)
 # 0 3 * * * cd $PROJECT_DIR && ./scripts/backup_database.sh
 
-# ============================================================================
-# MONITORING (Future)
-# ============================================================================
-
-# Check for stale data and send alerts - every 12 hours
+# Data freshness monitoring (check_data_freshness.py - not implemented)
 # 0 */12 * * * cd $PROJECT_DIR && python scripts/check_data_freshness.py
 
 # ============================================================================

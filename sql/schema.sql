@@ -250,6 +250,9 @@ GROUP BY ct.name
 ORDER BY total_value_usd DESC;
 
 -- Historical net worth over time (daily snapshots)
+-- NOTE: This view is replaced by a TABLE in migration 003_create_net_worth_history_table.sql
+-- The table stores pre-calculated daily snapshots created by scripts/snapshot_net_worth.py
+-- This view is kept here for backwards compatibility with databases that haven't run migration 003
 CREATE VIEW IF NOT EXISTS net_worth_history AS
 SELECT
     DATE(b.timestamp) as date,
