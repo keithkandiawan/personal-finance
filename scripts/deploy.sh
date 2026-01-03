@@ -302,6 +302,70 @@ confirm_python_environment() {
     log_success "✓ Python environment confirmed: $PYTHON_PATH"
 }
 
+# Validate environment configuration
+validate_env_file() {
+    separator
+    log_info "Validating environment configuration"
+    separator
+
+    echo ""
+    ENV_PATH="${PROJECT_ROOT}/.env"
+
+    if [ ! -f "$ENV_PATH" ]; then
+        log_error ".env file not found at: $ENV_PATH"
+        echo ""
+        log_info "The automated scripts require API keys and credentials in .env"
+        echo ""
+
+        if [ -f "${PROJECT_ROOT}/.env.example" ]; then
+            log_info "To create .env file:"
+            echo "  1. cp .env.example .env"
+            echo "  2. nano .env  # Add your API keys"
+            echo "  3. Re-run: ./scripts/deploy.sh"
+        else
+            log_info "Create a .env file with required credentials:"
+            echo "  BINANCE_API_KEY=your_key"
+            echo "  BINANCE_API_SECRET=your_secret"
+            echo "  GOOGLE_CREDENTIALS_PATH=path/to/credentials.json"
+            echo "  # ... and other required keys"
+        fi
+        echo ""
+        log_warning "Skipping systemd timer installation"
+        return 1
+    fi
+
+    log_success "✓ .env file found"
+
+    # Check file permissions
+    ENV_PERMS=$(stat -c %a "$ENV_PATH" 2>/dev/null || stat -f %A "$ENV_PATH" 2>/dev/null)
+    if [[ "$ENV_PERMS" != "600" && "$ENV_PERMS" != "0600" ]]; then
+        log_warning ".env permissions are $ENV_PERMS (should be 600 for security)"
+        log_info "Run: chmod 600 $ENV_PATH"
+    else
+        log_success "✓ .env has secure permissions (600)"
+    fi
+
+    # Check for basic required variables
+    MISSING_VARS=()
+
+    # These are optional but commonly needed
+    grep -q "^BINANCE_API_KEY=" "$ENV_PATH" || MISSING_VARS+=("BINANCE_API_KEY")
+    grep -q "^GOOGLE_CREDENTIALS_PATH=" "$ENV_PATH" || MISSING_VARS+=("GOOGLE_CREDENTIALS_PATH")
+
+    if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+        log_warning "Some common variables not found in .env:"
+        for var in "${MISSING_VARS[@]}"; do
+            echo "  - $var"
+        done
+        echo ""
+        log_info "Add these if you plan to use the corresponding features"
+    fi
+
+    echo ""
+    log_success "Environment configuration validated"
+    return 0
+}
+
 # Install systemd timers
 install_systemd_timers() {
     separator
@@ -519,20 +583,16 @@ print_next_steps() {
     echo ""
     echo "Next steps to start using the system:"
     echo ""
-    echo "1. Configure environment variables:"
-    echo "   cp .env.example .env"
-    echo "   nano .env  # Add your API keys and credentials"
-    echo ""
-    echo "2. (Optional) Configure Google Sheets:"
+    echo "1. (Optional) Configure Google Sheets export:"
     echo "   See: docs/GOOGLE_SHEETS_SETUP.md"
     echo ""
-    echo "3. Run initial update (or wait for 9 AM daily run):"
+    echo "2. Run initial update (or wait for 9 AM daily run):"
     echo "   sudo systemctl start portfolio-update.service"
     echo ""
-    echo "4. Monitor logs:"
+    echo "3. Monitor logs:"
     echo "   journalctl -u portfolio-update.service -f"
     echo ""
-    echo "5. Check timer status:"
+    echo "4. Check timer status:"
     echo "   systemctl list-timers portfolio-update.timer"
     echo ""
     echo "Your portfolio tracker is ready to use!"
@@ -556,6 +616,15 @@ main() {
     create_directories
     check_python
     check_dependencies
+
+    # Validate .env file exists (fail early if missing)
+    echo ""
+    if ! validate_env_file; then
+        echo ""
+        log_error "Deployment cannot proceed without .env file"
+        log_info "Please create .env with your API keys and credentials, then re-run this script"
+        exit 1
+    fi
 
     # Confirm Python environment early (before doing any work)
     echo ""

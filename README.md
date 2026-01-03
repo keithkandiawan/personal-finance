@@ -32,7 +32,22 @@ cd personal-finance
 pip install -e .
 ```
 
-### 2. Initialize Database
+### 2. Configure Environment Variables
+
+**IMPORTANT: Do this BEFORE running the deployment script!**
+
+```bash
+# Copy example configuration
+cp .env.example .env
+
+# Edit with your API keys and credentials
+nano .env
+
+# Secure the file
+chmod 600 .env
+```
+
+### 3. Initialize Database
 
 **Option 1: Quick Setup (Recommended) - One-Command Installer**
 
@@ -46,6 +61,8 @@ Use the deployment script to set up everything in one command:
 ./scripts/deploy.sh /path/to/portfolio.db
 ```
 
+**Note:** The script will validate your `.env` file exists before proceeding.
+
 This automatically:
 - ✅ Creates the database with complete schema
 - ✅ Runs all database migrations (including migration 003)
@@ -56,7 +73,7 @@ This automatically:
 - ✅ Optionally installs systemd timers for automated updates (Linux only)
 - ✅ Verifies the deployment
 
-**After running the deploy script**, your system is ready to use! Just add your API keys to `.env` and start ingesting data.
+**After running the deploy script**, your system is ready to use! Start ingesting data or wait for the 9 AM automated run.
 
 **Option 2: Manual Setup**
 
@@ -236,6 +253,16 @@ The deployment script (`./scripts/deploy.sh`) automatically sets up system-level
 2. **9:00 AM + 10s** - Ingest balances from all sources
 3. **9:00 AM + 20s** - Create net worth snapshot
 4. **9:00 AM + 30s** - Export analytics to Google Sheets
+
+**Prerequisites:**
+- `.env` file must exist in project root with API keys and credentials
+- The deployment script will validate `.env` before installing timers
+- Scripts use `load_dotenv()` which reads `.env` from the working directory
+
+**Environment File Location:**
+- API credentials: `.env` (project root) - used by Python scripts
+- Systemd environment: `.env.systemd` (project root) - used by systemd service
+- The systemd service sets `WorkingDirectory` to project root, so scripts find `.env` automatically
 
 **Note:** System-level services start at boot and run 24/7, perfect for headless servers. Installation requires sudo (one-time).
 
