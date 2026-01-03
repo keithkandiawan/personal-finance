@@ -26,7 +26,6 @@ NC='\033[0m' # No Color
 # Configuration
 DB_PATH="${1:-data/portfolio.db}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_DIR="${PROJECT_ROOT}/logs"
 DATA_DIR="${PROJECT_ROOT}/data"
 
 # Utility functions
@@ -69,8 +68,38 @@ check_existing_database() {
 create_directories() {
     log_info "Creating directories..."
     mkdir -p "$DATA_DIR"
-    mkdir -p "$LOG_DIR"
     log_success "Directories created"
+}
+
+# Check OS is Linux
+check_os() {
+    log_info "Checking operating system..."
+
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        log_error "This deployment script only supports Linux"
+        log_error "Detected OS: $OSTYPE"
+        echo ""
+        log_info "For macOS or other systems:"
+        log_info "  1. Manually run bootstrap scripts"
+        log_info "  2. Set up scheduling manually with launchd (macOS)"
+        echo ""
+        exit 1
+    fi
+
+    log_success "Running on Linux"
+}
+
+# Check systemd availability
+check_systemd() {
+    log_info "Checking systemd availability..."
+
+    if ! command -v systemctl &> /dev/null; then
+        log_error "systemd is not available on this system"
+        log_info "This script requires systemd for service management"
+        exit 1
+    fi
+
+    log_success "systemd is available"
 }
 
 # Check Python installation
@@ -220,6 +249,274 @@ bootstrap_rpc_endpoints() {
     fi
 }
 
+# Confirm Python environment
+confirm_python_environment() {
+    separator
+    log_info "Python Environment Confirmation"
+    separator
+
+    # Detect current Python
+    PYTHON_PATH=$(which python3 2>/dev/null || which python 2>/dev/null || echo "")
+
+    if [ -z "$PYTHON_PATH" ]; then
+        log_error "Python not found in PATH"
+        exit 1
+    fi
+
+    echo ""
+    log_info "Detected Python environment:"
+    echo "  Path:    $PYTHON_PATH"
+
+    # Get version
+    PYTHON_VERSION=$($PYTHON_PATH --version 2>&1)
+    echo "  Version: $PYTHON_VERSION"
+
+    # Test Python can import required packages
+    echo ""
+    log_info "Checking dependencies..."
+    if ! $PYTHON_PATH -c "import dotenv" 2>/dev/null; then
+        log_error "python-dotenv not found in this environment"
+        log_error "Please install dependencies first: pip install -e ."
+        exit 1
+    fi
+    log_success "✓ Required packages installed"
+
+    # Ask for confirmation
+    echo ""
+    log_warning "IMPORTANT: This Python environment will be used for all automated jobs."
+    echo ""
+    read -p "Continue with this Python environment? [y/N] " -n 1 -r
+    echo
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        log_info "Deployment cancelled."
+        echo ""
+        log_info "To use a different Python:"
+        echo "  1. Activate your desired Python environment"
+        echo "  2. Re-run this script: ./scripts/deploy.sh"
+        echo ""
+        exit 0
+    fi
+
+    log_success "✓ Python environment confirmed: $PYTHON_PATH"
+}
+
+# Validate environment configuration
+validate_env_file() {
+    separator
+    log_info "Validating environment configuration"
+    separator
+
+    echo ""
+    ENV_PATH="${PROJECT_ROOT}/.env"
+
+    if [ ! -f "$ENV_PATH" ]; then
+        log_error ".env file not found at: $ENV_PATH"
+        echo ""
+        log_info "The automated scripts require API keys and credentials in .env"
+        echo ""
+
+        if [ -f "${PROJECT_ROOT}/.env.example" ]; then
+            log_info "To create .env file:"
+            echo "  1. cp .env.example .env"
+            echo "  2. nano .env  # Add your API keys"
+            echo "  3. Re-run: ./scripts/deploy.sh"
+        else
+            log_info "Create a .env file with required credentials:"
+            echo "  BINANCE_API_KEY=your_key"
+            echo "  BINANCE_API_SECRET=your_secret"
+            echo "  GOOGLE_CREDENTIALS_PATH=path/to/credentials.json"
+            echo "  # ... and other required keys"
+        fi
+        echo ""
+        log_warning "Skipping systemd timer installation"
+        return 1
+    fi
+
+    log_success "✓ .env file found"
+
+    # Check file permissions
+    ENV_PERMS=$(stat -c %a "$ENV_PATH" 2>/dev/null || stat -f %A "$ENV_PATH" 2>/dev/null)
+    if [[ "$ENV_PERMS" != "600" && "$ENV_PERMS" != "0600" ]]; then
+        log_warning ".env permissions are $ENV_PERMS (should be 600 for security)"
+        log_info "Run: chmod 600 $ENV_PATH"
+    else
+        log_success "✓ .env has secure permissions (600)"
+    fi
+
+    # Check for basic required variables
+    MISSING_VARS=()
+
+    # These are optional but commonly needed
+    grep -q "^BINANCE_API_KEY=" "$ENV_PATH" || MISSING_VARS+=("BINANCE_API_KEY")
+    grep -q "^GOOGLE_CREDENTIALS_PATH=" "$ENV_PATH" || MISSING_VARS+=("GOOGLE_CREDENTIALS_PATH")
+
+    if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+        log_warning "Some common variables not found in .env:"
+        for var in "${MISSING_VARS[@]}"; do
+            echo "  - $var"
+        done
+        echo ""
+        log_info "Add these if you plan to use the corresponding features"
+    fi
+
+    echo ""
+    log_success "Environment configuration validated"
+    return 0
+}
+
+# Install systemd timers
+install_systemd_timers() {
+    separator
+    log_info "STEP 8: Installing systemd timers (optional)"
+    separator
+
+    echo ""
+    log_info "This will install a daily automated update sequence:"
+    echo "  9:00 AM - Complete portfolio update (all 4 steps)"
+    echo "    → Update FX rates"
+    echo "    → Ingest balances (all sources)"
+    echo "    → Create net worth snapshot"
+    echo "    → Export to Google Sheets"
+    echo ""
+    log_info "All steps run sequentially in correct dependency order"
+    echo ""
+
+    read -p "Do you want to install systemd timers? [y/N] " -n 1 -r
+    echo
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Skipping systemd installation"
+        echo ""
+        log_warning "You can set up automation later by re-running this script"
+        return 0
+    fi
+
+    # System-level systemd requires sudo
+    log_info "Checking sudo access (required for system-level systemd)..."
+    if ! sudo -n true 2>/dev/null; then
+        log_warning "This step requires sudo access"
+        sudo -v || {
+            log_error "Cannot proceed without sudo"
+            return 1
+        }
+    fi
+    log_success "✓ Sudo access confirmed"
+
+    # Create environment file for systemd
+    ENV_FILE="${PROJECT_ROOT}/.env.systemd"
+    log_info "Creating systemd environment file..."
+
+    # Get PATH from Python location
+    PYTHON_DIR=$(dirname "$PYTHON_PATH")
+    PYTHON_BIN_DIR=$(dirname "$PYTHON_DIR")/bin
+
+    cat > "$ENV_FILE" << EOF
+# Systemd environment file for portfolio tracker
+# Auto-generated by deploy.sh
+
+PYTHON_PATH=$PYTHON_PATH
+PROJECT_DIR=$PROJECT_ROOT
+PATH=$PYTHON_DIR:$PYTHON_BIN_DIR:/usr/local/bin:/usr/bin:/bin
+HOME=$HOME
+USER=$USER
+EOF
+
+    chmod 644 "$ENV_FILE"
+    log_success "✓ Environment file: $ENV_FILE"
+
+    # Create systemd service file
+    SERVICE_FILE="/etc/systemd/system/portfolio-update.service"
+    log_info "Creating systemd service..."
+
+    sudo tee "$SERVICE_FILE" > /dev/null << EOF
+[Unit]
+Description=Portfolio Tracker Daily Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=$USER
+Group=$(id -gn)
+WorkingDirectory=$PROJECT_ROOT
+EnvironmentFile=$ENV_FILE
+
+# Run all 4 steps sequentially
+ExecStart=/bin/bash -c '\
+  \$PYTHON_PATH scripts/ingest_fx_rates.py data/portfolio.db && \
+  sleep 10 && \
+  \$PYTHON_PATH scripts/ingest_balances.py --sources all && \
+  sleep 10 && \
+  \$PYTHON_PATH scripts/snapshot_net_worth.py && \
+  sleep 10 && \
+  \$PYTHON_PATH scripts/export_to_sheets.py'
+
+# Security
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$PROJECT_ROOT
+
+# Restart on failure
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    log_success "✓ Service file: $SERVICE_FILE"
+
+    # Create systemd timer file
+    TIMER_FILE="/etc/systemd/system/portfolio-update.timer"
+    log_info "Creating systemd timer..."
+
+    sudo tee "$TIMER_FILE" > /dev/null << EOF
+[Unit]
+Description=Run portfolio update daily at 9 AM
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    log_success "✓ Timer file: $TIMER_FILE"
+
+    # Reload systemd and enable timer
+    log_info "Enabling systemd timer..."
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable portfolio-update.timer
+    sudo systemctl start portfolio-update.timer
+
+    if systemctl is-active --quiet portfolio-update.timer; then
+        log_success "✓ Systemd timer installed and running"
+        echo ""
+        log_info "Timer status:"
+        systemctl status portfolio-update.timer --no-pager | head -n 10
+        echo ""
+        log_info "Next run:"
+        systemctl list-timers portfolio-update.timer --no-pager
+    else
+        log_error "✗ Failed to start systemd timer"
+        return 1
+    fi
+
+    echo ""
+    log_info "Useful commands:"
+    echo "  View logs:    journalctl -u portfolio-update.service -f"
+    echo "  Check status: systemctl status portfolio-update.timer"
+    echo "  Run now:      sudo systemctl start portfolio-update.service"
+    echo "  Disable:      sudo systemctl disable portfolio-update.timer"
+}
+
 # Verify deployment
 verify_deployment() {
     separator
@@ -242,14 +539,28 @@ verify_deployment() {
         fi
     done
 
-    # Check for critical views
-    VIEWS=$(sqlite3 "$DB_PATH" "SELECT name FROM sqlite_master WHERE type='view' AND name IN ('net_worth_summary', 'net_worth_by_currency', 'net_worth_by_asset_class', 'net_worth_history');" 2>/dev/null || echo "")
-    VIEW_COUNT=$(echo "$VIEWS" | grep -c "net_worth" || echo "0")
+    # Check for critical views/tables
+    log_info "Checking analytics views/tables..."
 
-    if [ "$VIEW_COUNT" -eq 4 ]; then
-        log_success "All 4 analytics views created"
+    # Check if net_worth_history is a table or view
+    NWH_TYPE=$(sqlite3 "$DB_PATH" "SELECT type FROM sqlite_master WHERE name='net_worth_history';" 2>/dev/null || echo "")
+
+    if [ "$NWH_TYPE" = "table" ]; then
+        log_success "✓ net_worth_history table exists (migration 003 applied)"
+    elif [ "$NWH_TYPE" = "view" ]; then
+        log_warning "⚠ net_worth_history is still a view (migration 003 not applied?)"
     else
-        log_warning "Analytics views may be incomplete"
+        log_warning "⚠ net_worth_history not found"
+    fi
+
+    # Check other critical views
+    VIEWS=$(sqlite3 "$DB_PATH" "SELECT name FROM sqlite_master WHERE type='view' AND name IN ('net_worth_summary', 'net_worth_by_currency', 'net_worth_by_asset_class', 'latest_balances');" 2>/dev/null || echo "")
+    VIEW_COUNT=$(echo "$VIEWS" | wc -w | tr -d ' ')
+
+    if [ "$VIEW_COUNT" -ge 3 ]; then
+        log_success "✓ Analytics views created"
+    else
+        log_warning "⚠ Some analytics views may be missing"
     fi
 }
 
@@ -260,31 +571,31 @@ print_next_steps() {
     separator
 
     echo ""
-    echo "Database initialized at: $DB_PATH"
+    echo "✓ Database initialized at: $DB_PATH"
+    echo "✓ Database migrations applied (including migration 003)"
+    echo "✓ Bootstrap data loaded"
+    echo "✓ Python configured: $PYTHON_PATH"
+
+    if systemctl is-active --quiet portfolio-update.timer 2>/dev/null; then
+        echo "✓ Systemd timer installed and active"
+    fi
+
     echo ""
-    echo "Next steps:"
+    echo "Next steps to start using the system:"
     echo ""
-    echo "1. Configure environment variables:"
-    echo "   cp .env.example .env"
-    echo "   nano .env  # Add your API keys and credentials"
-    echo ""
-    echo "2. (Optional) Configure Google Sheets:"
+    echo "1. (Optional) Configure Google Sheets export:"
     echo "   See: docs/GOOGLE_SHEETS_SETUP.md"
     echo ""
-    echo "3. Fetch initial FX rates:"
-    echo "   python3 scripts/ingest_fx_rates.py $DB_PATH"
+    echo "2. Run initial update (or wait for 9 AM daily run):"
+    echo "   sudo systemctl start portfolio-update.service"
     echo ""
-    echo "4. Ingest balances:"
-    echo "   python3 scripts/ingest_balances.py --sources all"
+    echo "3. Monitor logs:"
+    echo "   journalctl -u portfolio-update.service -f"
     echo ""
-    echo "5. Export to Google Sheets (if configured):"
-    echo "   python3 scripts/export_to_sheets.py"
+    echo "4. Check timer status:"
+    echo "   systemctl list-timers portfolio-update.timer"
     echo ""
-    echo "6. Set up cron jobs:"
-    echo "   cp cron.example cron.conf"
-    echo "   nano cron.conf  # Edit paths"
-    echo "   crontab cron.conf"
-    echo ""
+    echo "Your portfolio tracker is ready to use!"
     separator
 }
 
@@ -299,10 +610,25 @@ main() {
     echo ""
 
     # Pre-flight checks
+    check_os
+    check_systemd
     check_existing_database
     create_directories
     check_python
     check_dependencies
+
+    # Validate .env file exists (fail early if missing)
+    echo ""
+    if ! validate_env_file; then
+        echo ""
+        log_error "Deployment cannot proceed without .env file"
+        log_info "Please create .env with your API keys and credentials, then re-run this script"
+        exit 1
+    fi
+
+    # Confirm Python environment early (before doing any work)
+    echo ""
+    confirm_python_environment
 
     echo ""
     log_info "Starting deployment..."
@@ -319,6 +645,10 @@ main() {
 
     # Verify
     verify_deployment
+
+    # Install systemd timers (optional)
+    echo ""
+    install_systemd_timers
 
     # Success
     echo ""

@@ -32,28 +32,48 @@ cd personal-finance
 pip install -e .
 ```
 
-### 2. Initialize Database
+### 2. Configure Environment Variables
 
-**Option 1: Quick Setup (Recommended)**
-
-Use the deployment script to initialize everything in one command:
+**IMPORTANT: Do this BEFORE running the deployment script!**
 
 ```bash
-# Initialize database and run all bootstrap scripts
+# Copy example configuration
+cp .env.example .env
+
+# Edit with your API keys and credentials
+nano .env
+
+# Secure the file
+chmod 600 .env
+```
+
+### 3. Initialize Database
+
+**Option 1: Quick Setup (Recommended) - One-Command Installer**
+
+Use the deployment script to set up everything in one command:
+
+```bash
+# Initialize database, bootstrap data, and optionally install systemd timers (Linux only)
 ./scripts/deploy.sh
 
 # Or specify custom database path
 ./scripts/deploy.sh /path/to/portfolio.db
 ```
 
+**Note:** The script will validate your `.env` file exists before proceeding.
+
 This automatically:
-- Creates the database with complete schema
-- Runs all database migrations
-- Bootstraps currencies (USD, BTC, ETH, etc.)
-- Bootstraps account types and providers
-- Configures TradingView symbol mappings
-- Sets up blockchain network configurations
-- Verifies the deployment
+- ✅ Creates the database with complete schema
+- ✅ Runs all database migrations (including migration 003)
+- ✅ Bootstraps currencies (USD, BTC, ETH, etc.)
+- ✅ Bootstraps account types and providers
+- ✅ Configures TradingView symbol mappings
+- ✅ Sets up blockchain network configurations
+- ✅ Optionally installs systemd timers for automated updates (Linux only)
+- ✅ Verifies the deployment
+
+**After running the deploy script**, your system is ready to use! Start ingesting data or wait for the 9 AM automated run.
 
 **Option 2: Manual Setup**
 
@@ -64,6 +84,7 @@ python scripts/init_db.py data/portfolio.db
 # Run migrations
 sqlite3 data/portfolio.db < sql/migrations/001_add_blockchain_support.sql
 sqlite3 data/portfolio.db < sql/migrations/002_add_wallet_addresses.sql
+sqlite3 data/portfolio.db < sql/migrations/003_create_net_worth_history_table.sql
 
 # Bootstrap currencies
 python scripts/bootstrap_currencies.py data/portfolio.db
@@ -214,33 +235,70 @@ The FX ingestion script fetches current exchange rates from TradingView:
 python scripts/ingest_fx_rates.py data/portfolio.db
 
 # Check logs
-tail -f logs/fx_rates_$(date +%Y%m).log
+journalctl -u portfolio-update.service -f
 ```
 
 **Features:**
 - Lock file prevents concurrent runs
-- Monthly log rotation
+- Logs to systemd journal (use journalctl to view)
 - Validates database before running
 - Reports stale rates (>24h old)
 - Exit codes: 0=success, 1=failure, 2=already running
 
-### Cron Setup
+### Systemd Timer Setup (Linux Only)
+
+The deployment script (`./scripts/deploy.sh`) automatically sets up system-level systemd timers on Linux. The timer runs all 4 update steps sequentially once daily at 9:00 AM:
+
+1. **9:00 AM** - Update FX rates from TradingView
+2. **9:00 AM + 10s** - Ingest balances from all sources
+3. **9:00 AM + 20s** - Create net worth snapshot
+4. **9:00 AM + 30s** - Export analytics to Google Sheets
+
+**Prerequisites:**
+- `.env` file must exist in project root with API keys and credentials
+- The deployment script will validate `.env` before installing timers
+- Scripts use `load_dotenv()` which reads `.env` from the working directory
+
+**Environment File Location:**
+- API credentials: `.env` (project root) - used by Python scripts
+- Systemd environment: `.env.systemd` (project root) - used by systemd service
+- The systemd service sets `WorkingDirectory` to project root, so scripts find `.env` automatically
+
+**Note:** System-level services start at boot and run 24/7, perfect for headless servers. Installation requires sudo (one-time).
+
+**Manual Management:**
 
 ```bash
-# Copy example config
-cp cron.example cron.conf
+# Check timer status
+systemctl status portfolio-update.timer
 
-# Edit paths
-nano cron.conf
+# View next scheduled run
+systemctl list-timers portfolio-update.timer
 
-# Install crontab
-crontab cron.conf
+# Manually trigger update (without waiting for scheduled time)
+sudo systemctl start portfolio-update.service
 
-# Example: Update FX rates daily at 9 AM
-0 9 * * * cd /path/to/personal-finance && python scripts/ingest_fx_rates.py data/portfolio.db
+# View logs
+journalctl -u portfolio-update.service -f
+
+# View recent logs
+journalctl -u portfolio-update.service -n 100
+
+# Stop timer
+sudo systemctl stop portfolio-update.timer
+
+# Disable timer (prevent auto-start on boot)
+sudo systemctl disable portfolio-update.timer
+
+# Re-enable timer
+sudo systemctl enable portfolio-update.timer
+sudo systemctl start portfolio-update.timer
 ```
 
-See `cron.example` for complete scheduling examples.
+**Configuration Files:**
+- Service: `/etc/systemd/system/portfolio-update.service`
+- Timer: `/etc/systemd/system/portfolio-update.timer`
+- Environment: `.env.systemd` in project directory
 
 ### Exporting Analytics to Google Sheets
 
@@ -251,7 +309,7 @@ Export database views to Google Sheets for visualization and dashboards:
 python scripts/export_to_sheets.py data/portfolio.db
 
 # Check logs
-tail -f logs/export_$(date +%Y%m).log
+journalctl -u portfolio-update.service -f
 ```
 
 **Exported tabs:**
@@ -280,12 +338,14 @@ echo "EXPORT_SHEET_ID=your-export-sheet-id" >> .env
 ```
 
 **Scheduling:**
-```bash
-# Create daily snapshots at 11:59 PM
-59 23 * * * cd /path && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
 
-# Export to sheets daily at midnight (after snapshot)
-0 0 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+The deployment script automatically configures systemd timers to run all update steps (including snapshots and exports) daily at 9:00 AM. See "Systemd Timer Setup" section above for management commands.
+
+To run manually:
+```bash
+# Create today's snapshot and export to sheets
+python scripts/snapshot_net_worth.py
+python scripts/export_to_sheets.py
 ```
 
 ### Creating Net Worth Snapshots
