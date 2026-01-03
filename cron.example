@@ -11,48 +11,43 @@
 PROJECT_DIR=/path/to/personal-finance
 
 # ============================================================================
-# FX RATE UPDATES
+# DAILY UPDATE SEQUENCE (9:00 AM - 9:15 AM)
 # ============================================================================
+# All updates run sequentially once per day in the correct dependency order
 
-# Update FX rates daily at 9:00 AM
-# (After markets open but before most people check)
-0 9 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db
+# STEP 1: Update FX rates (9:00 AM)
+# Must run first - provides latest exchange rates for value calculations
+0 9 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db >> logs/fx_rates.log 2>&1
 
-# Alternative: Update every 6 hours
-# 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db
+# STEP 2: Ingest balances from all sources (9:05 AM)
+# Depends on: FX rates (to calculate USD/IDR values)
+# Fetches from exchanges, wallets, and Google Sheets
+5 9 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources all >> logs/balances.log 2>&1
 
-# ============================================================================
-# BALANCE INGESTION
-# ============================================================================
+# STEP 3: Create net worth snapshot (9:10 AM)
+# Depends on: Latest balances
+# Calculates and stores daily assets, liabilities, net worth
+10 9 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
 
-# Exchange balances - every 4 hours
-# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources exchanges >> logs/balances.log 2>&1
-
-# Wallet balances - every 4 hours
-# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources wallets >> logs/balances.log 2>&1
-
-# Sheet balances - daily at 8:00 AM
-# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet >> logs/balances.log 2>&1
-
-# All sources - every 6 hours
-# 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources all >> logs/balances.log 2>&1
+# STEP 4: Export to Google Sheets (9:15 AM)
+# Depends on: Snapshot data
+# Updates dashboard with latest analytics
+15 9 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 
 # ============================================================================
-# NET WORTH SNAPSHOT
+# ALTERNATIVE SCHEDULES (All commented out by default)
 # ============================================================================
 
-# Create daily net worth snapshot - daily at 11:59 PM
-59 23 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
+# Multiple daily updates (every 6 hours)
+# 0 */6 * * * cd $PROJECT_DIR && python scripts/ingest_fx_rates.py data/portfolio.db >> logs/fx_rates.log 2>&1
+# 5 */6 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources all >> logs/balances.log 2>&1
+# 10 */6 * * * cd $PROJECT_DIR && python scripts/snapshot_net_worth.py >> logs/snapshot.log 2>&1
+# 15 */6 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
 
-# ============================================================================
-# GOOGLE SHEETS EXPORT
-# ============================================================================
-
-# Export analytics to Google Sheets daily (after snapshot)
-0 0 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
-
-# Alternative: Export every 6 hours (after balance ingestion)
-# 5 */6 * * * cd $PROJECT_DIR && python scripts/export_to_sheets.py >> logs/export.log 2>&1
+# Individual source schedules (if not using --sources all)
+# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources exchanges >> logs/exchanges.log 2>&1
+# 0 */4 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources wallets >> logs/wallets.log 2>&1
+# 0 8 * * * cd $PROJECT_DIR && python scripts/ingest_balances.py --sources sheet >> logs/sheet.log 2>&1
 
 # ============================================================================
 # FUTURE ENHANCEMENTS (Scripts not yet implemented)
