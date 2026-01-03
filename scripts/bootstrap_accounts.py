@@ -86,6 +86,8 @@ def bootstrap_accounts(db_path: str):
     add_account(conn, "Binance", "exchange", "Binance", "Main crypto exchange")
     add_account(conn, "OKX", "exchange", "OKX", "Crypto exchange")
     add_account(conn, "Bitget Evelyn", "exchange", "Bitget", "Crypto exchange - Evelyn")
+    add_account(conn, "Mobee Evelyn", "exchange", "Mobee", "Crypto exchange - Evelyn")
+    add_account(conn, "Mobee Sus", "exchange", "Mobee", "Crypto exchange - Sus")
 
     # ========================================================================
     # CRYPTO WALLETS (Assets)
