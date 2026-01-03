@@ -140,7 +140,6 @@ def validate_database(db_path: Path) -> bool:
                 'net_worth_summary',
                 'net_worth_by_asset_class',
                 'net_worth_by_currency',
-                'net_worth_history'
             )
         """
         )
@@ -151,7 +150,6 @@ def validate_database(db_path: Path) -> bool:
             "net_worth_summary",
             "net_worth_by_asset_class",
             "net_worth_by_currency",
-            "net_worth_history",
         }
 
         if not required_views.issubset(views):
