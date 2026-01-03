@@ -329,15 +329,22 @@ install_systemd_timers() {
         return 0
     fi
 
-    # Create systemd user directory
-    SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
-    mkdir -p "$SYSTEMD_USER_DIR"
+    # System-level systemd requires sudo
+    log_info "Checking sudo access (required for system-level systemd)..."
+    if ! sudo -n true 2>/dev/null; then
+        log_warning "This step requires sudo access"
+        sudo -v || {
+            log_error "Cannot proceed without sudo"
+            return 1
+        }
+    fi
+    log_success "✓ Sudo access confirmed"
 
     # Create environment file for systemd
     ENV_FILE="${PROJECT_ROOT}/.env.systemd"
     log_info "Creating systemd environment file..."
 
-    # Get PATH from conda if applicable
+    # Get PATH from Python location
     PYTHON_DIR=$(dirname "$PYTHON_PATH")
     PYTHON_BIN_DIR=$(dirname "$PYTHON_DIR")/bin
 
@@ -352,13 +359,14 @@ HOME=$HOME
 USER=$USER
 EOF
 
+    chmod 644 "$ENV_FILE"
     log_success "✓ Environment file: $ENV_FILE"
 
     # Create systemd service file
-    SERVICE_FILE="$SYSTEMD_USER_DIR/portfolio-update.service"
+    SERVICE_FILE="/etc/systemd/system/portfolio-update.service"
     log_info "Creating systemd service..."
 
-    cat > "$SERVICE_FILE" << EOF
+    sudo tee "$SERVICE_FILE" > /dev/null << EOF
 [Unit]
 Description=Portfolio Tracker Daily Update
 After=network-online.target
@@ -366,6 +374,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+User=$USER
+Group=$(id -gn)
 WorkingDirectory=$PROJECT_ROOT
 EnvironmentFile=$ENV_FILE
 
@@ -382,28 +392,29 @@ ExecStart=/bin/bash -c '\
 # Security
 PrivateTmp=yes
 NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$PROJECT_ROOT
 
 # Restart on failure
 Restart=on-failure
 RestartSec=300
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 EOF
 
     log_success "✓ Service file: $SERVICE_FILE"
 
     # Create systemd timer file
-    TIMER_FILE="$SYSTEMD_USER_DIR/portfolio-update.timer"
+    TIMER_FILE="/etc/systemd/system/portfolio-update.timer"
     log_info "Creating systemd timer..."
 
-    cat > "$TIMER_FILE" << EOF
+    sudo tee "$TIMER_FILE" > /dev/null << EOF
 [Unit]
 Description=Run portfolio update daily at 9 AM
-Requires=portfolio-update.service
 
 [Timer]
-OnCalendar=daily
 OnCalendar=*-*-* 09:00:00
 Persistent=true
 AccuracySec=1min
@@ -417,18 +428,18 @@ EOF
     # Reload systemd and enable timer
     log_info "Enabling systemd timer..."
 
-    systemctl --user daemon-reload
-    systemctl --user enable portfolio-update.timer
-    systemctl --user start portfolio-update.timer
+    sudo systemctl daemon-reload
+    sudo systemctl enable portfolio-update.timer
+    sudo systemctl start portfolio-update.timer
 
-    if systemctl --user is-active --quiet portfolio-update.timer; then
+    if systemctl is-active --quiet portfolio-update.timer; then
         log_success "✓ Systemd timer installed and running"
         echo ""
         log_info "Timer status:"
-        systemctl --user status portfolio-update.timer --no-pager | head -n 10
+        systemctl status portfolio-update.timer --no-pager | head -n 10
         echo ""
         log_info "Next run:"
-        systemctl --user list-timers portfolio-update.timer --no-pager
+        systemctl list-timers portfolio-update.timer --no-pager
     else
         log_error "✗ Failed to start systemd timer"
         return 1
@@ -436,10 +447,10 @@ EOF
 
     echo ""
     log_info "Useful commands:"
-    echo "  View logs:    journalctl --user -u portfolio-update.service -f"
-    echo "  Check status: systemctl --user status portfolio-update.timer"
-    echo "  Run now:      systemctl --user start portfolio-update.service"
-    echo "  Disable:      systemctl --user disable portfolio-update.timer"
+    echo "  View logs:    journalctl -u portfolio-update.service -f"
+    echo "  Check status: systemctl status portfolio-update.timer"
+    echo "  Run now:      sudo systemctl start portfolio-update.service"
+    echo "  Disable:      sudo systemctl disable portfolio-update.timer"
 }
 
 # Verify deployment
@@ -501,7 +512,7 @@ print_next_steps() {
     echo "✓ Bootstrap data loaded"
     echo "✓ Python configured: $PYTHON_PATH"
 
-    if systemctl --user is-active --quiet portfolio-update.timer 2>/dev/null; then
+    if systemctl is-active --quiet portfolio-update.timer 2>/dev/null; then
         echo "✓ Systemd timer installed and active"
     fi
 
@@ -516,13 +527,13 @@ print_next_steps() {
     echo "   See: docs/GOOGLE_SHEETS_SETUP.md"
     echo ""
     echo "3. Run initial update (or wait for 9 AM daily run):"
-    echo "   systemctl --user start portfolio-update.service"
+    echo "   sudo systemctl start portfolio-update.service"
     echo ""
     echo "4. Monitor logs:"
-    echo "   journalctl --user -u portfolio-update.service -f"
+    echo "   journalctl -u portfolio-update.service -f"
     echo ""
     echo "5. Check timer status:"
-    echo "   systemctl --user list-timers portfolio-update.timer"
+    echo "   systemctl list-timers portfolio-update.timer"
     echo ""
     echo "Your portfolio tracker is ready to use!"
     separator

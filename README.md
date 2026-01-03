@@ -218,7 +218,7 @@ The FX ingestion script fetches current exchange rates from TradingView:
 python scripts/ingest_fx_rates.py data/portfolio.db
 
 # Check logs
-journalctl --user -u portfolio-update.service -f
+journalctl -u portfolio-update.service -f
 ```
 
 **Features:**
@@ -230,42 +230,47 @@ journalctl --user -u portfolio-update.service -f
 
 ### Systemd Timer Setup (Linux Only)
 
-The deployment script (`./scripts/deploy.sh`) automatically sets up systemd timers on Linux systems. The timer runs all 4 update steps sequentially once daily at 9:00 AM:
+The deployment script (`./scripts/deploy.sh`) automatically sets up system-level systemd timers on Linux. The timer runs all 4 update steps sequentially once daily at 9:00 AM:
 
 1. **9:00 AM** - Update FX rates from TradingView
 2. **9:00 AM + 10s** - Ingest balances from all sources
 3. **9:00 AM + 20s** - Create net worth snapshot
 4. **9:00 AM + 30s** - Export analytics to Google Sheets
 
+**Note:** System-level services start at boot and run 24/7, perfect for headless servers. Installation requires sudo (one-time).
+
 **Manual Management:**
 
 ```bash
 # Check timer status
-systemctl --user status portfolio-update.timer
+systemctl status portfolio-update.timer
 
 # View next scheduled run
-systemctl --user list-timers portfolio-update.timer
+systemctl list-timers portfolio-update.timer
 
 # Manually trigger update (without waiting for scheduled time)
-systemctl --user start portfolio-update.service
+sudo systemctl start portfolio-update.service
 
 # View logs
-journalctl --user -u portfolio-update.service -f
+journalctl -u portfolio-update.service -f
+
+# View recent logs
+journalctl -u portfolio-update.service -n 100
 
 # Stop timer
-systemctl --user stop portfolio-update.timer
+sudo systemctl stop portfolio-update.timer
 
 # Disable timer (prevent auto-start on boot)
-systemctl --user disable portfolio-update.timer
+sudo systemctl disable portfolio-update.timer
 
 # Re-enable timer
-systemctl --user enable portfolio-update.timer
-systemctl --user start portfolio-update.timer
+sudo systemctl enable portfolio-update.timer
+sudo systemctl start portfolio-update.timer
 ```
 
 **Configuration Files:**
-- Service: `~/.config/systemd/user/portfolio-update.service`
-- Timer: `~/.config/systemd/user/portfolio-update.timer`
+- Service: `/etc/systemd/system/portfolio-update.service`
+- Timer: `/etc/systemd/system/portfolio-update.timer`
 - Environment: `.env.systemd` in project directory
 
 ### Exporting Analytics to Google Sheets
@@ -277,7 +282,7 @@ Export database views to Google Sheets for visualization and dashboards:
 python scripts/export_to_sheets.py data/portfolio.db
 
 # Check logs
-journalctl --user -u portfolio-update.service -f
+journalctl -u portfolio-update.service -f
 ```
 
 **Exported tabs:**
