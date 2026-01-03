@@ -102,11 +102,13 @@ class BinanceAdapter(ExchangeAdapter):
 
         # Fetch from Simple Earn (Flexible Savings)
         try:
-            earn_positions = self.exchange.sapi_get_simple_earn_flexible_position()
+            earn_positions = self.exchange.sapi_get_simple_earn_flexible_position({'size': 100})
+            logger.info(f"Fetched Binance earn (flexible) positions {earn_positions}")
             earn_count = 0
             if "rows" in earn_positions:
                 for position in earn_positions["rows"]:
                     currency = position.get("asset")
+                    logger.info(f"Earn position: {currency}")
                     # totalAmount includes both free and locked
                     amount = float(position.get("totalAmount", 0))
 
