@@ -217,16 +217,13 @@ The FX ingestion script fetches current exchange rates from TradingView:
 # Run manually
 python scripts/ingest_fx_rates.py data/portfolio.db
 
-# Check logs (user-level systemd)
+# Check logs
 journalctl --user -u portfolio-update.service -f
-
-# Or check file logs
-tail -f /var/log/portfolio/update.log
 ```
 
 **Features:**
 - Lock file prevents concurrent runs
-- Logs to /var/log/portfolio/
+- Logs to systemd journal (use journalctl to view)
 - Validates database before running
 - Reports stale rates (>24h old)
 - Exit codes: 0=success, 1=failure, 2=already running
@@ -279,11 +276,8 @@ Export database views to Google Sheets for visualization and dashboards:
 # Run manually
 python scripts/export_to_sheets.py data/portfolio.db
 
-# Check logs (systemd)
+# Check logs
 journalctl --user -u portfolio-update.service -f
-
-# Or check file logs
-tail -f /var/log/portfolio/update.log
 ```
 
 **Exported tabs:**

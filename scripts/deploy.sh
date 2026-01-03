@@ -381,10 +381,6 @@ ExecStart=/bin/bash -c '\
   sleep 10 && \
   \$PYTHON_PATH scripts/export_to_sheets.py'
 
-# Logging
-StandardOutput=append:/var/log/portfolio/update.log
-StandardError=append:/var/log/portfolio/update.log
-
 # Security
 PrivateTmp=yes
 NoNewPrivileges=yes
@@ -419,23 +415,6 @@ WantedBy=timers.target
 EOF
 
     log_success "✓ Timer file: $TIMER_FILE"
-
-    # Create log directory
-    log_info "Setting up logging..."
-
-    if [ -w /var/log ]; then
-        # Can write to /var/log directly
-        sudo mkdir -p /var/log/portfolio
-        sudo chown $USER:$USER /var/log/portfolio
-        log_success "✓ Log directory: /var/log/portfolio/"
-    else
-        # Fall back to project logs directory
-        log_warning "Cannot write to /var/log (need sudo)"
-        log_info "Using project logs directory instead"
-
-        # Update service file to use project logs
-        sed -i "s|/var/log/portfolio/|$LOG_DIR/|g" "$SERVICE_FILE"
-    fi
 
     # Reload systemd and enable timer
     log_info "Enabling systemd timer..."
