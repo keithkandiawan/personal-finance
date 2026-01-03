@@ -139,7 +139,7 @@ def validate_database(db_path: Path) -> bool:
             AND name IN (
                 'net_worth_summary',
                 'net_worth_by_asset_class',
-                'net_worth_by_currency',
+                'net_worth_by_currency'
             )
         """
         )
