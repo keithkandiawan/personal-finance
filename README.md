@@ -317,6 +317,7 @@ journalctl -u portfolio-update.service -f
 - `By Asset Class` - Breakdown by crypto/stocks/fiat/etc.
 - `By Currency` - Holdings per currency
 - `History` - Daily net worth time series
+- `Latest Balances` - Current balance for each account and currency
 
 **Features:**
 - Overwrites existing data (preserves charts)

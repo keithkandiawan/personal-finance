@@ -25,6 +25,7 @@ Exported Tabs:
     - By Asset Class: Breakdown by crypto/stocks/fiat
     - By Currency: Holdings per currency
     - History: Daily net worth snapshots (Assets, Liabilities, Net Worth)
+    - Latest Balances: Current balance for each account and currency
 
 Example Cron (every 6 hours, 5min after ingestion):
     5 */6 * * * cd /path && python scripts/export_to_sheets.py >> logs/export.log 2>&1
@@ -52,6 +53,7 @@ VIEW_COLUMN_TYPES = {
     "net_worth_by_asset_class": ["text", "numeric", "numeric", "numeric"],
     "net_worth_by_currency": ["text", "text", "numeric", "numeric", "numeric"],
     "net_worth_history": ["date", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"],
+    "latest_balances": ["numeric", "text", "numeric", "text", "numeric", "numeric", "numeric", "datetime"],
 }
 
 
@@ -600,6 +602,11 @@ def export_all_views(
             "view_name": "net_worth_history",
             "tab_name": "History",
             "column_types": ["date", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"],
+        },
+        {
+            "view_name": "latest_balances",
+            "tab_name": "Latest Balances",
+            "column_types": ["numeric", "text", "numeric", "text", "numeric", "numeric", "numeric", "datetime"],
         },
     ]
 
